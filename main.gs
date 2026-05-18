@@ -52,17 +52,23 @@ function setupTriggers() {
 /**
  * Gets or creates the tracking spreadsheet
  */
-function getOrCreateSpreadsheet() {
+function getOrCreateSpreadsheet(spreadsheetId) {
   let spreadsheet;
   let isNewSpreadsheet = false;
+
+  if (spreadsheetId) {
+    spreadsheet = SpreadsheetApp.openById(spreadsheetId);
+  }
 
   // Prefer the spreadsheet that contains this bound Apps Script project.
   // Falling back to Drive by name can write to a different file than the
   // spreadsheet whose menu the user clicked.
-  try {
-    spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  } catch (e) {
-    spreadsheet = null;
+  if (!spreadsheet) {
+    try {
+      spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    } catch (e) {
+      spreadsheet = null;
+    }
   }
 
   if (!spreadsheet) {
@@ -100,7 +106,11 @@ return spreadsheet;
 }
 
 function logTrackerDebugState() {
-  const spreadsheet = getOrCreateSpreadsheet();
+  return logTrackerDebugStateForSpreadsheet();
+}
+
+function logTrackerDebugStateForSpreadsheet(spreadsheetId) {
+  const spreadsheet = getOrCreateSpreadsheet(spreadsheetId);
   const sheet = spreadsheet.getSheetByName("Applications");
   const runStart = new Date();
   const recentWindow = getScanWindow('recent', runStart);
@@ -109,6 +119,7 @@ function logTrackerDebugState() {
   Logger.log('Applications sheet: rows=' + (sheet ? sheet.getLastRow() : 'missing') + ', columns=' + (sheet ? sheet.getLastColumn() : 'missing'));
   Logger.log('Recent query: ' + buildGmailSearchQuery('recent', recentWindow));
   Logger.log('Historical query: ' + buildGmailSearchQuery('historical', historicalWindow));
+  return { spreadsheetName: spreadsheet.getName(), spreadsheetUrl: spreadsheet.getUrl(), rows: sheet ? sheet.getLastRow() : null, columns: sheet ? sheet.getLastColumn() : null, recentQuery: buildGmailSearchQuery('recent', recentWindow), historicalQuery: buildGmailSearchQuery('historical', historicalWindow) };
 }
 
 /**
@@ -181,10 +192,10 @@ function migrateSpreadsheet() {
   }
 }
 
-function scanEmails(mode) {
+function scanEmails(mode, spreadsheetId) {
   mode = mode === 'historical' ? 'historical' : 'recent';
   const startTime = getScanStartTime();
-  const spreadsheet = getOrCreateSpreadsheet();
+  const spreadsheet = getOrCreateSpreadsheet(spreadsheetId);
   const sheet = spreadsheet.getSheetByName("Applications");
 
   // Get all existing data from the spreadsheet
@@ -423,11 +434,11 @@ function scanEmails(mode) {
   return { mode: mode, completed: completedBatch, interrupted: interrupted, threads: metrics.threadsFound, added: metrics.added, updated: metrics.updated, skipped: metrics.skipped, parseFailures: metrics.parseFailures, rows: sheet.getLastRow(), query: query };
 }
 
-function importHistoricalEmails() {
+function importHistoricalEmails(spreadsheetId) {
   const importStartTime = getScanStartTime();
   const totals = { windows: 0, threads: 0, added: 0, updated: 0, skipped: 0, parseFailures: 0 };
   for (let i = 0; i < SCAN_CONFIG.maxHistoricalWindowsPerRun; i++) {
-    const result = scanEmails('historical');
+    const result = scanEmails('historical', spreadsheetId);
     totals.windows++;
     totals.threads += result.threads;
     totals.added += result.added;

@@ -2,6 +2,9 @@
   "timeZone": "America/Toronto",
   "exceptionLogging": "CLOUD",
   "runtimeVersion": "V8",
+  "executionApi": {
+    "access": "MYSELF"
+  },
   "oauthScopes": [
     "https://www.googleapis.com/auth/gmail.readonly",
     "https://www.googleapis.com/auth/gmail.compose",
