@@ -56,9 +56,10 @@ The Job Application Tracker is a powerful Google Apps Script application that au
 
 1. After refreshing, you should see a new menu item called "Job Tracker"
 2. Click on "Job Tracker" > "Scan Emails" to run a normal recent scan
-3. Allow the necessary permissions when prompted
-4. The script will automatically set up your spreadsheet with the correct headers and formatting
-5. To enable daily automatic scanning, click "Job Tracker" > "Set up daily scanning"
+3. Click on "Job Tracker" > "Import Historical Emails" to process older backfill batches
+4. Allow the necessary permissions when prompted
+5. The script will automatically set up your spreadsheet with the correct headers and formatting
+6. To enable daily automatic scanning, click "Job Tracker" > "Set up daily scanning"
 
 ## Advanced Features
 

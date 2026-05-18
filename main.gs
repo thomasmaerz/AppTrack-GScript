@@ -20,6 +20,7 @@ function onOpen() {
   const ui = SpreadsheetApp.getUi();
   ui.createMenu('Job Tracker')
     .addItem('Scan Emails', 'scanEmails')
+    .addItem('Import Historical Emails', 'importHistoricalEmails')
     .addItem('Set up daily scanning', 'setupTriggers')
     .addItem('Refresh Visualizations', 'refreshVisualizations')
     .addItem('Create Rejection Follow-up Drafts', 'createRejectionFollowupDrafts')
