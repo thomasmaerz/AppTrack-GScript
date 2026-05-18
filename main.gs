@@ -21,6 +21,8 @@ function onOpen() {
   ui.createMenu('Job Tracker')
     .addItem('Scan Emails', 'scanEmails')
     .addItem('Import Historical Emails', 'importHistoricalEmails')
+    .addItem('Show Debug State', 'logTrackerDebugState')
+    .addItem('Run Tracker Tests', 'runTrackerTests')
     .addItem('Set up daily scanning', 'setupTriggers')
     .addItem('Refresh Visualizations', 'refreshVisualizations')
     .addItem('Create Rejection Follow-up Drafts', 'createRejectionFollowupDrafts')
@@ -246,7 +248,8 @@ function scanEmails(mode) {
   }
   
   const scanWindow = getScanWindow(mode, new Date(startTime));
-  const threads = GmailApp.search(buildGmailSearchQuery(mode, scanWindow), 0, getBatchSize());
+  const query = buildGmailSearchQuery(mode, scanWindow);
+  const threads = GmailApp.search(query, 0, getBatchSize());
   metrics.threadsFound = threads.length;
   let updatesCount = 0;
   const pendingCellUpdates = [];
@@ -416,10 +419,26 @@ function scanEmails(mode) {
   if (completedBatch) {
     completeScanWindow(mode, scanWindow);
   }
-  Logger.log('Scan summary: threads=' + metrics.threadsFound + ', processed=' + metrics.processed + ', added=' + metrics.added + ', updated=' + metrics.updated + ', skipped=' + metrics.skipped + ', parseFailures=' + metrics.parseFailures + ', moreWork=' + !completedBatch);
+  Logger.log('Scan summary: mode=' + mode + ', spreadsheet=' + spreadsheet.getUrl() + ', rows=' + sheet.getLastRow() + ', window=' + formatScanDate_(scanWindow.start) + '..' + formatScanDate_(scanWindow.end) + ', threads=' + metrics.threadsFound + ', processed=' + metrics.processed + ', added=' + metrics.added + ', updated=' + metrics.updated + ', skipped=' + metrics.skipped + ', parseFailures=' + metrics.parseFailures + ', moreWork=' + !completedBatch);
+  return { mode: mode, completed: completedBatch, interrupted: interrupted, threads: metrics.threadsFound, added: metrics.added, updated: metrics.updated, skipped: metrics.skipped, parseFailures: metrics.parseFailures, rows: sheet.getLastRow(), query: query };
 }
 
-function importHistoricalEmails() { scanEmails('historical'); }
+function importHistoricalEmails() {
+  const importStartTime = getScanStartTime();
+  const totals = { windows: 0, threads: 0, added: 0, updated: 0, skipped: 0, parseFailures: 0 };
+  for (let i = 0; i < SCAN_CONFIG.maxHistoricalWindowsPerRun; i++) {
+    const result = scanEmails('historical');
+    totals.windows++;
+    totals.threads += result.threads;
+    totals.added += result.added;
+    totals.updated += result.updated;
+    totals.skipped += result.skipped;
+    totals.parseFailures += result.parseFailures;
+    if (!result.completed || isNearExecutionLimit(importStartTime)) break;
+  }
+  Logger.log('Historical import summary: windows=' + totals.windows + ', threads=' + totals.threads + ', added=' + totals.added + ', updated=' + totals.updated + ', skipped=' + totals.skipped + ', parseFailures=' + totals.parseFailures);
+  SpreadsheetApp.getActive().toast('Historical import checked ' + totals.windows + ' windows. Added ' + totals.added + ', updated ' + totals.updated + '.');
+}
 
 /**
  * Creates draft email responses for rejected job applications

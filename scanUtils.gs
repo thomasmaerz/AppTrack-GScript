@@ -4,7 +4,8 @@ const SCAN_CONFIG = {
   stopBufferMs: 15 * 1000,
   defaultRecentDays: 7,
   overlapDays: 1,
-  historicalWindowDays: 30
+  historicalWindowDays: 30,
+  maxHistoricalWindowsPerRun: 12
 };
 const SCAN_KEYS = { lastSuccess: 'lastSuccessfulScanAt', historicalWindowEnd: 'historicalWindowEnd' };
 
@@ -21,12 +22,12 @@ function buildHistoricalScanWindow(windowEnd) { return { start: daysBefore_(wind
 function getHistoricalWindowEnd(runStart) { const value = scanProperties_().getProperty(SCAN_KEYS.historicalWindowEnd); return value ? new Date(value) : runStart; }
 function getScanWindow(mode, runStart) { return mode === 'historical' ? buildHistoricalScanWindow(getHistoricalWindowEnd(runStart)) : buildRecentScanWindow(getLastSuccessfulScanAt(), runStart); }
 function completeScanWindow(mode, window) { if (mode === 'historical') scanProperties_().setProperty(SCAN_KEYS.historicalWindowEnd, window.start.toISOString()); else setLastSuccessfulScanAt(window.end); }
+function formatScanDate_(date) { return Utilities.formatDate(date, Session.getScriptTimeZone(), 'yyyy/MM/dd'); }
 function buildDateWindowFilter(window) {
   // Gmail's `before:` operator is exclusive at the start of the named day.
   // Add one day so a window ending during May 18 includes May 18 mail.
   const inclusiveEndDate = daysBefore_(window.end, -1);
-  return 'after:' + Utilities.formatDate(window.start, Session.getScriptTimeZone(), 'yyyy/MM/dd') +
-    ' before:' + Utilities.formatDate(inclusiveEndDate, Session.getScriptTimeZone(), 'yyyy/MM/dd');
+  return 'after:' + formatScanDate_(window.start) + ' before:' + formatScanDate_(inclusiveEndDate);
 }
 function getHigherPriorityStatus(currentStatus, candidateStatus) {
   const priority = { 'Applied': 1, 'Status Update': 2, 'Rejected': 3, 'Assessment': 4, 'Interview Request': 5, 'Offer Received': 6 };
@@ -35,7 +36,7 @@ function getHigherPriorityStatus(currentStatus, candidateStatus) {
 
 function buildGmailSearchQuery(mode, window) {
   const signalGroup = '(subject:("thank you for applying" OR "thank you for your application" OR "application received" OR "we received your application" OR "confirmation of your application" OR "interview invitation" OR "job offer" OR "status update" OR "regarding your application") OR body:"thank you for your interest" OR from:(@talent OR @careers OR @jobs OR @hr OR @recruiting OR @hire OR candidates.workablemail.com OR @inbound.workablemail.com))';
-  const exclusions = '-from:jobs-listings@linkedin.com -from:@glassdoor.com -label:social -category:promotions -subject:"password reset" -subject:"weekly application update" -subject:digest -unsubscribe';
+  const exclusions = '-from:jobs-listings@linkedin.com -from:@glassdoor.com -label:social -category:promotions -subject:"password reset" -subject:"weekly application update" -subject:digest';
   return signalGroup + ' ' + exclusions + ' ' + buildDateWindowFilter(window);
 }
 
