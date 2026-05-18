@@ -11,6 +11,7 @@
 
 // Configuration
 const SPREADSHEET_NAME = "Application Tracker";
+const DEBUG_SPREADSHEET_ID = "1FnCwtwAxCEp9mK-aNtaJnM-iAXbCsGzNIOOK3f7nEr4";
 
 
 /**
@@ -107,6 +108,18 @@ return spreadsheet;
 
 function logTrackerDebugState() {
   return logTrackerDebugStateForSpreadsheet();
+}
+
+function logTargetSpreadsheetDebugState() {
+  return logTrackerDebugStateForSpreadsheet(DEBUG_SPREADSHEET_ID);
+}
+
+function importHistoricalEmailsForTargetSpreadsheet() {
+  return importHistoricalEmails(DEBUG_SPREADSHEET_ID);
+}
+
+function scanEmailsForTargetSpreadsheet() {
+  return scanEmails('recent', DEBUG_SPREADSHEET_ID);
 }
 
 function logTrackerDebugStateForSpreadsheet(spreadsheetId) {
