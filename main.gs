@@ -54,16 +54,26 @@ function getOrCreateSpreadsheet() {
   let spreadsheet;
   let isNewSpreadsheet = false;
 
-  // Try to find existing spreadsheet
-  const files = DriveApp.getFilesByName(SPREADSHEET_NAME);
-  if (files.hasNext()) {
-    const file = files.next();
-    spreadsheet = SpreadsheetApp.open(file);
-  } 
-  else {
+  // Prefer the spreadsheet that contains this bound Apps Script project.
+  // Falling back to Drive by name can write to a different file than the
+  // spreadsheet whose menu the user clicked.
+  try {
+    spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  } catch (e) {
+    spreadsheet = null;
+  }
+
+  if (!spreadsheet) {
+    // Try to find existing spreadsheet for standalone script usage.
+    const files = DriveApp.getFilesByName(SPREADSHEET_NAME);
+    if (files.hasNext()) {
+      const file = files.next();
+      spreadsheet = SpreadsheetApp.open(file);
+    } else {
     // Create new spreadsheet
-    spreadsheet = SpreadsheetApp.create(SPREADSHEET_NAME);
-    isNewSpreadsheet = true;
+      spreadsheet = SpreadsheetApp.create(SPREADSHEET_NAME);
+      isNewSpreadsheet = true;
+    }
   }
   
   // Set up headers if needed
@@ -85,6 +95,18 @@ function getOrCreateSpreadsheet() {
   }
 
 return spreadsheet;
+}
+
+function logTrackerDebugState() {
+  const spreadsheet = getOrCreateSpreadsheet();
+  const sheet = spreadsheet.getSheetByName("Applications");
+  const runStart = new Date();
+  const recentWindow = getScanWindow('recent', runStart);
+  const historicalWindow = getScanWindow('historical', runStart);
+  Logger.log('Tracker spreadsheet: name=' + spreadsheet.getName() + ', url=' + spreadsheet.getUrl());
+  Logger.log('Applications sheet: rows=' + (sheet ? sheet.getLastRow() : 'missing') + ', columns=' + (sheet ? sheet.getLastColumn() : 'missing'));
+  Logger.log('Recent query: ' + buildGmailSearchQuery('recent', recentWindow));
+  Logger.log('Historical query: ' + buildGmailSearchQuery('historical', historicalWindow));
 }
 
 /**
