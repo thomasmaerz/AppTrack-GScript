@@ -24,12 +24,8 @@ const StatusUtils = {
     // Combined content for searching
     const combinedContent = lowerSubject + " " + lowerBody + " " + lowerHtmlBody;
     
-    // First check for rejection - the most common status for most job applications
-    if (this.containsRejection(combinedContent)) {
-      return "Rejected";
-    }
-    // Offer detection (highest priority)
-    else if (this.containsOffer(combinedContent)) {
+    // Priority: offer > interview > assessment > rejection > application.
+    if (this.containsOffer(combinedContent)) {
       return "Offer Received";
     }
     // Interview detection
@@ -39,7 +35,10 @@ const StatusUtils = {
     // Assessment detection
     else if (this.containsAssessment(combinedContent)) {
       return "Assessment";
-    } 
+    }
+    else if (this.containsRejection(combinedContent)) {
+      return "Rejected";
+    }
     // Look for application confirmation
     else if (this.containsApplication(combinedContent)) {
       return "Applied";
@@ -152,7 +151,7 @@ const StatusUtils = {
       "not successful",
       "position has been filled",
       "decided to pursue",
-      "regret to inform",,
+      "regret to inform",
       "unable to offer",
       "will not be progressing",
       "we have decided to proceed with",
@@ -177,11 +176,11 @@ const StatusUtils = {
     
     // If any of the rejection indicators are found AND we don't have positive indicators, it's a rejection
     const hasRejectionIndicator = rejectionIndicators.some(indicator => content.includes(indicator));
-    const hasPositiveIndicator = content.includes("congratulations") || 
-                                content.includes("offer") || 
+    const hasPositiveIndicator = content.includes("congratulations") ||
+                                content.includes("offer") ||
                                 content.includes("invitation to interview") ||
-                                content.includes("would like to invite you");
-                                content.includes("we have received your application"); 
+                                content.includes("would like to invite you") ||
+                                content.includes("we have received your application");
     
     return hasRejectionIndicator && !hasPositiveIndicator;
   }

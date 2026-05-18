@@ -12,7 +12,6 @@
 // Configuration
 const SPREADSHEET_NAME = "Application Tracker";
 
-const GMAIL_SEARCH_QUERY = "(subject:(\"thank you for applying\" OR \"thank you for your application\" OR \"application received\" OR \"we received your application\" OR \"confirmation of your application\" OR \"next steps\" OR \"interview invitation\" OR \"move forward\" OR \"pleased to inform\" OR \"job offer\" OR \"Application\" OR \"Regarding your application\" OR \"Next steps\" OR \"Interview\" OR \"Thank you for your interest\" OR \"We have received\" OR \"received your\" OR \"Position\" OR \"Job opportunity\" OR \"Status update\" OR \"for applying\" OR \"thank you from\" OR \"thanks from\" OR \"thanks for\" OR \"applied\" OR \"follow-up\") OR body:\"thank you for your interest\") -unsubscribe OR from:(@talent OR @careers OR @jobs OR @hr OR @recruiting OR @hire OR candidates.workablemail.com OR @inbound.workablemail.com) -from:jobs-listings@linkedin.com -from:@glassdoor.com -label:social -category:promotions -subject:\"password reset\"";
 
 /**
  * Creates menu items when the spreadsheet is opened
@@ -157,7 +156,9 @@ function migrateSpreadsheet() {
   }
 }
 
-function scanEmails() {
+function scanEmails(mode) {
+  mode = mode === 'historical' ? 'historical' : 'recent';
+  const startTime = getScanStartTime();
   const spreadsheet = getOrCreateSpreadsheet();
   const sheet = spreadsheet.getSheetByName("Applications");
 
@@ -165,7 +166,7 @@ function scanEmails() {
   const existingData = sheet.getDataRange().getValues();
   const headers = existingData[0];
   
-  Logger.log("Starting scan with headers: " + headers.join(", "));
+  const metrics = { threadsFound: 0, processed: 0, added: 0, updated: 0, skipped: 0, parseFailures: 0 };
 
   // Get column indices - all 0-based
   const jobTitleIndex = headers.indexOf('Job Title');
@@ -221,16 +222,19 @@ function scanEmails() {
     }
   }
   
-  // -- PART 1: SCAN FOR STATUS UPDATES FIRST --
+  const scanWindow = getScanWindow(mode, new Date(startTime));
+  const threads = GmailApp.search(buildGmailSearchQuery(mode, scanWindow), 0, getBatchSize());
+  metrics.threadsFound = threads.length;
   let updatesCount = 0;
-  
-  // Search for all job-related emails
-  const threads = GmailApp.search(GMAIL_SEARCH_QUERY, 0, 300);
-  Logger.log("Found " + threads.length + " threads matching the query");
+  const pendingCellUpdates = [];
+  const newRows = [];
+  const newRowLinks = [];
+  let interrupted = false;
 
   
   // First pass: Process existing thread IDs for status updates
   for (const thread of threads) {
+    if (isNearExecutionLimit(startTime)) { interrupted = true; break; }
     const threadId = thread.getId();
     const threadLink = "https://mail.google.com/mail/u/0/#inbox/" + threadId;
     
@@ -249,11 +253,8 @@ function scanEmails() {
       const status = StatusUtils.determineStatus(subject, body, htmlBody);
       
       // Update the spreadsheet with status and date - add 1 to index for getRange
-      sheet.getRange(rowNumber, statusIndex + 1).setValue(status);
-      
-      // Update the Date Updated column with latest message date and link - add 1 to index for getRange
-      sheet.getRange(rowNumber, dateUpdatedIndex + 1).setValue(date);
-      SpreadsheetUtils.formatDateAsLink(sheet, rowNumber, dateUpdatedIndex + 1, threadLink, date);
+      const currentStatus = updatedData[rowNumber - 1][statusIndex];
+      pendingCellUpdates.push({ row: rowNumber, status: getHigherPriorityStatus(currentStatus, status), updatedDate: date, threadLink: threadLink });
       
       updatesCount++;
     }
@@ -264,11 +265,13 @@ function scanEmails() {
   let updatedApplicationsCount = 0;
   
   for (const thread of threads) {
+    if (isNearExecutionLimit(startTime)) { interrupted = true; break; }
     const threadId = thread.getId();
     const threadLink = "https://mail.google.com/mail/u/0/#inbox/" + threadId;
     
     // Skip if already processed by thread ID
     if (existingThreadIds.has(threadId)) continue;
+    if (shouldSkipThread(thread)) { metrics.skipped++; continue; }
     
     const messages = thread.getMessages();
     const message = messages[0]; // Get the first message in the thread
@@ -285,6 +288,7 @@ function scanEmails() {
     const company = CompanyUtils.extractCompany(subject, body, from, htmlBody);
     const rawJobTitle = JobUtils.extractJobTitle(subject, body, from, htmlBody);
     const jobTitle = JobUtils.cleanJobTitle(JobUtils.cleanJobTitle(rawJobTitle));
+    if (jobTitle === 'Unlisted' || jobTitle === 'Unlisted Position') metrics.parseFailures++;
 
     // Determine the initial status
     let initialStatus = StatusUtils.determineStatus(subject, body, htmlBody);
@@ -325,55 +329,25 @@ function scanEmails() {
       // Get the current status from the sheet
       const currentStatus = sheet.getRange(existingRowNum, statusIndex + 1).getValue();
       
-      // Define status priority (higher number = higher priority)
-      const statusPriority = {
-        "Applied": 1,
-        "Status Update": 2,
-        "Rejected": 3,
-        "Assessment": 4,
-        "Interview Request": 5,
-        "Offer Received": 6
-      };
+      const nextStatus = getHigherPriorityStatus(currentStatus, initialStatus);
+      const shouldUpdateStatus = nextStatus !== currentStatus;
       
-      // Check if the new status has higher priority than the current one
-      let shouldUpdateStatus = false;
-      if (statusPriority[initialStatus] > statusPriority[currentStatus]) {
-        shouldUpdateStatus = true;
-      }
-      
-      // Always update the thread ID (in hidden column)
-      sheet.getRange(existingRowNum, threadIdIndex + 1).setValue(threadId);
-      
-      // Update the Date Updated column with the latest message date
-      sheet.getRange(existingRowNum, dateUpdatedIndex + 1).setValue(lastDate);
-      SpreadsheetUtils.formatDateAsLink(sheet, existingRowNum, dateUpdatedIndex + 1, threadLink, lastDate);
-      
-      // Only update status if it should be updated based on priority
-      if (shouldUpdateStatus) {
-        sheet.getRange(existingRowNum, statusIndex + 1).setValue(initialStatus);
-      }
+      pendingCellUpdates.push({ row: existingRowNum, threadId: threadId, status: shouldUpdateStatus ? nextStatus : null, updatedDate: lastDate, threadLink: threadLink });
       
       updatedApplicationsCount++;
     } else {
       // This is a new application - add a new row
-      const rowData = [
-        jobTitle,
-        company,
-        date,                  // Date Submitted
-        lastDate,              // Date Updated (same as Date Submitted for new applications)
-        initialStatus,         // Use the determined status instead of "Applied"
-        body.slice(0, 100)     // Raw Body
-      ];
-      
-      sheet.appendRow(rowData);
-      const newRow = sheet.getLastRow();
-      
-      // Store the thread ID in the hidden column
-      sheet.getRange(newRow, threadIdIndex + 1).setValue(threadId);
-      
-      // Format the dates as hyperlinks
-      SpreadsheetUtils.formatDateAsLink(sheet, newRow, dateSubmittedIndex + 1, threadLink, date);
-      SpreadsheetUtils.formatDateAsLink(sheet, newRow, dateUpdatedIndex + 1, threadLink, lastDate);
+      const rowData = new Array(sheet.getLastColumn()).fill('');
+      rowData[jobTitleIndex] = jobTitle;
+      rowData[companyIndex] = company;
+      rowData[dateSubmittedIndex] = date;
+      rowData[dateUpdatedIndex] = lastDate;
+      rowData[statusIndex] = initialStatus;
+      rowData[headers.indexOf('Raw Body')] = body.slice(0, 100);
+      rowData[threadIdIndex] = threadId;
+      const newRow = sheet.getLastRow() + newRows.length + 1;
+      newRows.push(rowData);
+      newRowLinks.push({ row: newRow, threadLink: threadLink, submittedDate: date, updatedDate: lastDate });
       
       // Add this to our maps so we can detect duplicates in the same batch
       existingThreadIds.set(threadId, newRow);
@@ -382,15 +356,22 @@ function scanEmails() {
       newApplicationsCount++;
     }
   }
+
+  if (newRows.length > 0) sheet.getRange(sheet.getLastRow() + 1, 1, newRows.length, newRows[0].length).setValues(newRows);
+  pendingCellUpdates.forEach(update => {
+    if (update.threadId) sheet.getRange(update.row, threadIdIndex + 1).setValue(update.threadId);
+    if (update.status) sheet.getRange(update.row, statusIndex + 1).setValue(update.status);
+    SpreadsheetUtils.formatDateAsLink(sheet, update.row, dateUpdatedIndex + 1, update.threadLink, update.updatedDate);
+  });
+  newRowLinks.forEach(link => {
+    SpreadsheetUtils.formatDateAsLink(sheet, link.row, dateSubmittedIndex + 1, link.threadLink, link.submittedDate);
+    SpreadsheetUtils.formatDateAsLink(sheet, link.row, dateUpdatedIndex + 1, link.threadLink, link.updatedDate);
+  });
+  metrics.processed = updatesCount + newApplicationsCount + updatedApplicationsCount;
+  metrics.added = newApplicationsCount;
+  metrics.updated = updatesCount + updatedApplicationsCount;
   
   // Apply color formatting to status cells
-  if (updatesCount > 0 || newApplicationsCount > 0 || updatedApplicationsCount > 0) {
-    SpreadsheetUtils.applyStatusFormatting(sheet, statusIndex + 1, 2, sheet.getLastRow());
-  }
-  
-  // Format the spreadsheet
-  sheet.autoResizeColumns(1, 6);
-  
   // Show confirmation
   let message = '';
   if (newApplicationsCount > 0) {
@@ -408,16 +389,14 @@ function scanEmails() {
   
   SpreadsheetApp.getActive().toast(message);
   
-  // Update the summary dashboard if it exists
-  try {
-    SpreadsheetUtils.createSummaryDashboard(sheet);
-  } catch (e) {
-    Logger.log("Error creating summary dashboard: " + e.toString());
+  const completedBatch = threads.length < getBatchSize() && !interrupted;
+  if (completedBatch) {
+    completeScanWindow(mode, scanWindow);
   }
-  
-  // Apply formatting after completing the scan
-  applyFormattingAfterUpdate();
+  Logger.log('Scan summary: threads=' + metrics.threadsFound + ', processed=' + metrics.processed + ', added=' + metrics.added + ', updated=' + metrics.updated + ', skipped=' + metrics.skipped + ', parseFailures=' + metrics.parseFailures + ', moreWork=' + !completedBatch);
 }
+
+function importHistoricalEmails() { scanEmails('historical'); }
 
 /**
  * Creates draft email responses for rejected job applications

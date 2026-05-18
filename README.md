@@ -7,7 +7,7 @@
   <img src= "https://media2.giphy.com/media/v1.Y2lkPTc5MGI3NjExMHExMjQ1Mmp1ejcxazdidzBzdm0xbG1tZmx2amttNmhkZjE4OTNiYiZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/haJ5ii4ALvt2zIOdKB/giphy.gif" alt="Tracker Demo GIF"/>
 </p>
 
-An automated Google Apps Script tool that helps you track and manage your job applications by scanning your Gmail inbox.
+An automated Google Apps Script tool that helps you track and manage your job applications by scanning your Gmail inbox. Originally created by **Adam Rangwala**; this fork keeps the original idea and adds reliability-focused improvements for larger inboxes.
 
 ## Overview
 
@@ -22,6 +22,8 @@ The Job Application Tracker is a powerful Google Apps Script application that au
 - **Follow-up Tools**: Creates draft emails to follow up on rejections to maintain professional connections
 - **Application Insights**: Analyzes job titles, application timing, and success rates
 - **Fully Automated**: Runs daily to keep your application tracking up-to-date
+- **Bounded Scans**: Processes Gmail in resumable batches so a large inbox does not exhaust Apps Script runtime
+- **Privacy-Conscious Logs**: Reports compact counters instead of raw email bodies or sensitive URLs
 
 ## Getting Started
 
@@ -43,6 +45,8 @@ The Job Application Tracker is a powerful Google Apps Script application that au
    - `extractionUtils.gs` (Company and job title extraction)
    - `statusUtils.gs` (Application status detection)
    - `spreadsheetUtils.gs` (Spreadsheet formatting)
+   - `scanUtils.gs` (batching, query construction, resume state, skip rules)
+   - `testFixtures.gs` (callable regression tests)
    - `applicationInsights.gs` (Analytics tools)
    - `jobTitleVisualization.gs` (Job title analysis)
 5. Save all files
@@ -51,7 +55,7 @@ The Job Application Tracker is a powerful Google Apps Script application that au
 ### Setup
 
 1. After refreshing, you should see a new menu item called "Job Tracker"
-2. Click on "Job Tracker" > "Scan Emails" to run the initial scan
+2. Click on "Job Tracker" > "Scan Emails" to run a normal recent scan
 3. Allow the necessary permissions when prompted
 4. The script will automatically set up your spreadsheet with the correct headers and formatting
 5. To enable daily automatic scanning, click "Job Tracker" > "Set up daily scanning"
@@ -68,13 +72,33 @@ The tool can automatically create draft emails for rejected applications to help
 
 ## How It Works
 
-1. **Email Detection**: The script uses a sophisticated search query to find job-related emails in your Gmail
+1. **Email Detection**: The script uses a grouped Gmail search query with exclusions for common noise
 2. **Information Extraction**: For each relevant email, it extracts:
    - Job title from the subject and body
    - Company name from the sender and content
    - Current application status based on email content
 3. **Status Updates**: When follow-up emails arrive, it updates the status of existing applications
-4. **Visualization**: Creates charts and insights based on your application data
+4. **Visualization**: Refreshes charts on demand so expensive presentation work does not slow ingestion
+
+## Reliability Improvements
+
+The scanner now separates fast ingestion from dashboard refreshes, processes a fixed batch at a time, and saves progress between runs. Normal scans use timestamp windows with a one-day overlap so newly arriving mail cannot shift the resume point; historical imports move through older thirty-day windows. Intentional overlap may re-read a few emails, but thread/application dedupe prevents duplicate rows. The changes were made because Apps Script has strict execution limits and Gmail searches can easily return hundreds of matching emails.
+
+### What changed
+
+- Bounded batches (50 threads by default) with resumable timestamp windows in `PropertiesService`
+- A global, grouped query with exclusions for digests, promotions, password resets, and obvious bulk noise
+- Skip rules before expensive parsing
+- Batched insertion of new rows and reduced hot-path formatting work
+- Targeted parsing for LinkedIn and Rogers/SuccessFactors-style confirmations
+- Corrected status priority: offer → interview → assessment → rejection → applied/status update
+
+### Challenges addressed
+
+- Gmail result sets can be noisy and broad terms create false positives
+- Large initial backfills can exceed runtime limits
+- Some application emails use abbreviated titles or atypical body layouts
+- Raw parser logging can leak private email content into cloud logs
 
 ## Status Categories
 
@@ -102,7 +126,7 @@ The summary dashboard provides insights into your job search:
 
 You can customize the script by modifying:
 
-- **Email Search Query**: Adjust the `GMAIL_SEARCH_QUERY` constant to refine which emails are detected
+- **Email Search Query**: Adjust the query builder in `scanUtils.gs` to refine which emails are detected
 - **Status Detection Keywords**: Modify the status detection patterns in `statusUtils.gs`
 - **Company/Job Title Extraction**: Update extraction patterns in `extractionUtils.gs`
 
@@ -113,7 +137,7 @@ You can customize the script by modifying:
 If the script runs but no applications appear:
 1. Ensure you've granted the script permission to access Gmail and Google Sheets
 2. Check that your sheet is named "Applications" (case-sensitive)
-3. Manually test the Gmail search query to make sure it finds job application emails
+3. Manually test the Gmail search query from `buildGmailSearchQuery('recent')` to make sure it finds job application emails
 4. Check the logs in the Apps Script editor for any errors
 
 ### Script Authorization Issues
@@ -134,5 +158,10 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## Acknowledgments
 
+- Original project and core tracker concept by [Adam Rangwala](https://github.com/adamrangwala)
 - Built using Google Apps Script
 - Inspired by the challenges of managing a modern job search process
+
+## Testing
+
+Run `runTrackerTests()` in the Apps Script editor after copying files. It covers representative LinkedIn confirmations and digests, Rogers-style confirmations, low-confidence titles, skip behavior, and status classification.

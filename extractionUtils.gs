@@ -9,6 +9,9 @@
 // =============================================================
 // Company Name Extraction Utilities
 // =============================================================
+const DEBUG_PARSING = false;
+function safeParserLog_(message) { if (DEBUG_PARSING) Logger.log(message); }
+function normalizeParserText_(text) { return String(text || '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim(); }
 const CompanyUtils = {
   
   isLikelyNotCompany: function(text) {
@@ -42,7 +45,8 @@ const CompanyUtils = {
    * @return {string} Extracted company name or "Unknown Company"
    */
   extractCompany: function(subject, body, from, htmlBody) {
-    console.log("Subject text: " + subject);
+    subject = normalizeParserText_(subject);
+    body = normalizeParserText_(body);
     // Method 1: Look for patterns in subject
     let match;
     const subjectPatterns = [
@@ -58,17 +62,11 @@ const CompanyUtils = {
     for (const pattern of subjectPatterns) {
       let match = subject.match(pattern);
       if (match) {
-        console.log("Match found: " + match[0]);
-        console.log("Captured group: " + match[1]);
-
         const candidate = match[1].trim();
-        console.log("Is likely not company? " + this.isLikelyNotCompany(candidate));
 
         if (!this.isLikelyNotCompany(candidate)) {
           return candidate; // Return immediately if it doesn't have a job descriptor
         }
-      }else{
-        console.log("No match found for pattern: " + pattern);
       }
     } 
 
@@ -96,17 +94,11 @@ const CompanyUtils = {
     for (const pattern of bodyPatterns) {
       let match = body.match(pattern);
       if (match) {
-        console.log("Match found: " + match[0]);
-        console.log("Captured group: " + match[1]);
-
         const candidate = match[1].trim();
-        console.log("Is likely not company? " + this.isLikelyNotCompany(candidate));
 
         if (!this.isLikelyNotCompany(candidate)) {
           return candidate; // Return immediately if it doesn't have a job descriptor
         }
-      }else{
-        console.log("No match found for pattern: " + pattern);
       }
 
     } 
@@ -129,9 +121,6 @@ const CompanyUtils = {
       for (const pattern of headerFooterPatterns) {
         match = htmlBody.match(pattern);
         if (match && match[1].trim().length > 2) return match[1].trim();
-      else{
-        console.log("No match found for pattern: " + pattern);
-      }  
       }
     }
     
@@ -247,6 +236,9 @@ const JobUtils = {
    */
 
   isLikelyJobTitle: function(text) {
+    text = normalizeParserText_(text);
+    if (!text || text.length > 100 || /https?:\/\/|\bhttps\b|\bis match\b/i.test(text)) return false;
+    if (/^(application|position|role|job)$/i.test(text)) return false;
     // Common job words that should indicate it's actually a job title
     const jobWords = [
       // Level/Seniority Indicators
@@ -265,7 +257,7 @@ const JobUtils = {
       "financial", "technical", "customer", "product",
       
       // Additional Common Role Words
-      "scientist", "designer", "strategist"
+      "scientist", "designer", "strategist", "architect", "arch", "netwk", "snr"
     ];
   
     // First, check if any job words are present as standalone words
@@ -281,7 +273,8 @@ const JobUtils = {
   },
 
   extractJobTitle: function(subject, body, from, htmlBody) {
-    console.log("Body text: " + body);
+    body = String(body || '');
+    const originalBody = body;
     // Preprocess body to standardize spaces and HTML entities
     if (body) {
       // Replace non-breaking spaces with regular spaces
@@ -304,11 +297,14 @@ const JobUtils = {
     }
 
     // Method 0: Look for Indeed application submitted pattern
+    const linkedInSentPattern = /Your application was sent to\s+[^\n]+\n\s*([^\n]+)/i;
+    let match = originalBody.match(linkedInSentPattern);
+    if (match && this.isAcceptableTitleCandidate(match[1])) return match[1].trim();
+
     const indeedPattern =  /Application submitted\s+([^\n<]+)/i;
-    let match = body.match(indeedPattern);
+    match = body.match(indeedPattern);
     if (match && match[1]) {
       const candidate = match[1].trim();
-      console.log("Found Indeed application pattern: " + candidate);
       if (this.isLikelyJobTitle(candidate)) {
         return candidate;
       }
@@ -331,8 +327,6 @@ const JobUtils = {
     for (const pattern of subjectPatterns) {
       let match = subject.match(pattern);
       if (match) {
-        console.log("Match found: " + match[0]);
-        console.log("Captured group: " + match[1]);
         const candidate = match[1].trim();
         if (this.isLikelyJobTitle(candidate)) {
           return candidate; // Return immediately if it looks like a job title
@@ -344,7 +338,8 @@ const JobUtils = {
     const bodyPatterns = [
       // Application patterns
       /apply(?:ing)? (?:to|for) (?:the|our)? ([A-Za-z0-9\s&(),'-.]+)(?:\s+position|\s+role|\s+at|\s+with|\s+job)/i,
-      /your application for (?:the)? (?:position|role|job|post)? (?:of)? ([A-Za-z0-9\s&(),'-]+)(?:,|.|\s+position|\s+role|\s+job)? (?:at|with)?/i,
+      /application for position of\s+([A-Za-z0-9\s&(),'-]+?)(?:[.,;]|$)/i,
+      /your application for (?:the)? (?:position|role|job|post)? (?:of)? ([A-Za-z0-9\s&(),'-]+?)(?:,|\.|\s+position|\s+role|\s+job|$)/i,
       
       // Receipt patterns
       /received your application for (?:the )?([A-Za-z0-9\s&(),'-]+)(?:,|\s+position|\s+role|\s+job)?/i,
@@ -369,19 +364,10 @@ const JobUtils = {
     for (const pattern of bodyPatterns) {
       let match = body.match(pattern);
       if (match) {
-        console.log("Match found: " + match[0]);
-        console.log("Captured group: " + match[1]);
-
         const candidate = match[1].trim();
-        console.log("Is likely job title? " + this.isLikelyJobTitle(candidate));
-
-        if (this.isLikelyJobTitle(candidate)) {
+        if (this.isAcceptableTitleCandidate(candidate)) {
           return candidate; // Return immediately if it looks like a job title
-        }else{
-          console.log("Failed isLikelyJobTitle check for: " + candidate);
         }
-      }else{
-        console.log("No match found for pattern: " + pattern);
       }
         // Continue checking other patterns if this doesn't look like a job title
     }
@@ -421,6 +407,11 @@ const JobUtils = {
     }
     
     return "Unlisted";
+  },
+
+  isAcceptableTitleCandidate: function(candidate) {
+    candidate = normalizeParserText_(candidate).split(/\b(?:role|position)\b|[.;]/i)[0].trim();
+    return this.isLikelyJobTitle(candidate);
   },
   
   /**
