@@ -21,7 +21,13 @@ function buildHistoricalScanWindow(windowEnd) { return { start: daysBefore_(wind
 function getHistoricalWindowEnd(runStart) { const value = scanProperties_().getProperty(SCAN_KEYS.historicalWindowEnd); return value ? new Date(value) : runStart; }
 function getScanWindow(mode, runStart) { return mode === 'historical' ? buildHistoricalScanWindow(getHistoricalWindowEnd(runStart)) : buildRecentScanWindow(getLastSuccessfulScanAt(), runStart); }
 function completeScanWindow(mode, window) { if (mode === 'historical') scanProperties_().setProperty(SCAN_KEYS.historicalWindowEnd, window.start.toISOString()); else setLastSuccessfulScanAt(window.end); }
-function buildDateWindowFilter(window) { return 'after:' + Utilities.formatDate(window.start, Session.getScriptTimeZone(), 'yyyy/MM/dd') + ' before:' + Utilities.formatDate(window.end, Session.getScriptTimeZone(), 'yyyy/MM/dd'); }
+function buildDateWindowFilter(window) {
+  // Gmail's `before:` operator is exclusive at the start of the named day.
+  // Add one day so a window ending during May 18 includes May 18 mail.
+  const inclusiveEndDate = daysBefore_(window.end, -1);
+  return 'after:' + Utilities.formatDate(window.start, Session.getScriptTimeZone(), 'yyyy/MM/dd') +
+    ' before:' + Utilities.formatDate(inclusiveEndDate, Session.getScriptTimeZone(), 'yyyy/MM/dd');
+}
 function getHigherPriorityStatus(currentStatus, candidateStatus) {
   const priority = { 'Applied': 1, 'Status Update': 2, 'Rejected': 3, 'Assessment': 4, 'Interview Request': 5, 'Offer Received': 6 };
   return (priority[candidateStatus] || 0) > (priority[currentStatus] || 0) ? candidateStatus : currentStatus;

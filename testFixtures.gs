@@ -48,6 +48,7 @@ function runTrackerTests() {
   const historicalWindow = buildHistoricalScanWindow(new Date('2026-04-01T00:00:00Z'));
   assertTrackerEqual(historicalWindow.end.toISOString(), '2026-04-01T00:00:00.000Z', 'historical window end');
   assertTrackerEqual(historicalWindow.start.toISOString(), '2026-03-02T00:00:00.000Z', 'historical window start');
-  assertTrackerEqual(buildDateWindowFilter(recentWindow).includes('before:2026/05/18'), true, 'query has before bound');
+  assertTrackerEqual(buildDateWindowFilter(recentWindow).includes('before:2026/05/18'), false, 'query does not exclude current day');
+  assertTrackerEqual(buildDateWindowFilter(recentWindow), 'after:2026/05/17 before:2026/05/19', 'before bound includes current day');
   return 'All tracker tests passed';
 }
