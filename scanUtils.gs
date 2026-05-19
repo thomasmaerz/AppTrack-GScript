@@ -171,14 +171,23 @@ function shouldSkipMessage(subject, from, body) {
   
   const bodyHasPositive = positiveKeywords.some(keyword => lowerBody.includes(keyword));
   if (bodyHasPositive) {
-    const bodyHasNoise = (lowerBody.includes('weekly application update') || 
-                          lowerBody.includes('jobs you may be interested in') || 
-                          lowerBody.includes('job alert') ||
-                          lowerBody.includes('password reset')) &&
-                         !lowerBody.includes('your application was sent') &&
-                         !lowerBody.includes('thank you for applying') &&
-                         !lowerBody.includes('thanks for applying') &&
-                         !lowerBody.includes('interview');
+    const bodyHasNoise = (
+      // Platform domains
+      domain.includes('substack') || 
+      domain.includes('beehiiv') || 
+      domain.includes('medium.com') ||
+      
+      // Keywords
+      lowerSubject.includes('newsletter') ||
+      lowerSubject.includes('digest') ||
+      lowerSubject.includes('security alert') ||
+      lowerBody.includes('read the full post') ||
+      lowerBody.includes('read the full story') ||
+      lowerBody.includes('new post on') ||
+      lowerBody.includes('published a new') ||
+      lowerBody.includes('stories for you') ||
+      lowerBody.includes('weekly newsletter')
+    );
                          
     if (!bodyHasNoise) {
       return false; // Keep valid body confirmation without general newsletter patterns

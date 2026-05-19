@@ -732,6 +732,7 @@ function runDiagnosticMailboxAudit() {
   
   let skippedCount = 0;
   let parsedCount = 0;
+  const auditData = [["Status", "From", "Subject", "Reason", "Clean Company", "Clean Title"]];
   
   for (let i = 0; i < allThreads.length; i++) {
     const thread = allThreads[i];
@@ -763,20 +764,34 @@ function runDiagnosticMailboxAudit() {
           reason = "Body contains positive keyword but sender/content matched newsletter noise platform patterns";
         }
       }
+      auditData.push(["SKIP", from, subject, reason, "", ""]);
       Logger.log(`[SKIP - ${reason}] From: ${from} | Subject: ${subject}`);
     } else {
       parsedCount++;
       const company = CompanyUtils.extractCompany(subject, body, from, firstMsg.getBody());
       const rawJobTitle = JobUtils.extractJobTitle(subject, body, from, firstMsg.getBody());
       const jobTitle = JobUtils.cleanJobTitle(rawJobTitle);
+      auditData.push(["PASS", from, subject, "Valid application", company, jobTitle]);
       Logger.log(`[PASS] From: ${from} | Subject: ${subject} => Co: ${company} | Title: ${jobTitle}`);
     }
   }
+  
+  // Write to temporary sheet named "Audit Logs"
+  const spreadsheet = getOrCreateSpreadsheet();
+  let auditSheet = spreadsheet.getSheetByName("Audit Logs");
+  if (auditSheet) {
+    auditSheet.clear();
+  } else {
+    auditSheet = spreadsheet.insertSheet("Audit Logs");
+  }
+  
+  auditSheet.getRange(1, 1, auditData.length, auditData[0].length).setValues(auditData);
+  auditSheet.autoResizeColumns(1, auditData[0].length);
   
   Logger.log(`Diagnostic Complete!`);
   Logger.log(`Total matching threads: ${allThreads.length}`);
   Logger.log(`Threads matched (parsed): ${parsedCount}`);
   Logger.log(`Threads skipped (noise filter): ${skippedCount}`);
   
-  SpreadsheetApp.getActive().toast(`Diagnostic Complete: Found ${allThreads.length} total strict matches! (Parsed ${parsedCount}, Skipped ${skippedCount})`);
+  SpreadsheetApp.getActive().toast(`Diagnostic Complete: Found ${allThreads.length} total strict matches! Open the "Audit Logs" sheet tab to view all entries!`);
 }
