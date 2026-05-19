@@ -106,21 +106,79 @@ function countGmailQueryUpToCap(query, cap) {
 
 function senderDomain_(from) { const match = String(from || '').match(/@([^>\s]+)/); return match ? match[1].toLowerCase() : ''; }
 function shouldSkipMessage(subject, from, body) {
-  const haystack = (String(subject || '') + ' ' + String(body || '')).toLowerCase();
+  const lowerSubject = String(subject || '').toLowerCase();
+  const lowerBody = String(body || '').toLowerCase();
   const domain = senderDomain_(from);
   
-  // High-confidence noise skips
-  if (domain === 'jobs-listings.linkedin.com' || domain === 'jobs-listings@linkedin.com') return true;
-  if (haystack.includes('weekly application update') || haystack.includes('jobs you may be interested in')) return true;
-  if (haystack.includes('password reset')) return true;
-  if (haystack.includes('calendar notification') && !haystack.includes('interview')) return true;
+  // 1. High-confidence positive keywords in the subject
+  const positiveKeywords = [
+    'your application was sent',
+    'application submitted',
+    'successfully applied',
+    'application received',
+    'we received your application',
+    'thank you for applying',
+    'thank you for your application',
+    'thank you for your interest',
+    'thank you for taking the time to apply',
+    'interview invitation',
+    'schedule interview',
+    'assessment',
+    'coding challenge',
+    'not moving forward',
+    'regret to inform',
+    'other candidates',
+    'unable to offer',
+    'congratulations',
+    'offer letter'
+  ];
   
-  // If it's a positive application signal (Applied, Interview, Assessment, Offer, Rejection)
-  if (isPositiveApplicationSignal_(haystack, domain)) {
-    return false; // Do not skip! Keep this email.
+  const subjectHasPositive = positiveKeywords.some(keyword => lowerSubject.includes(keyword));
+  if (subjectHasPositive) {
+    return false; // Keep it immediately!
   }
   
-  // If it doesn't match any positive signal, skip it by default (to filter out newsletters/security alerts)
-  return true; 
+  // 2. High-confidence subject noise skips
+  if (domain === 'jobs-listings.linkedin.com' || domain === 'jobs-listings@linkedin.com') return true;
+  if (lowerSubject.includes('weekly application update') || 
+      lowerSubject.includes('jobs you may be interested in') ||
+      lowerSubject.includes('job alert') ||
+      lowerSubject.includes('weekly') ||
+      lowerSubject.includes('digest') ||
+      lowerSubject.includes('password reset') ||
+      lowerSubject.includes('security alert') ||
+      (lowerSubject.includes('calendar notification') && !lowerSubject.includes('interview'))) {
+    return true; // Skip clear subject noise
+  }
+  
+  // 3. Trusted ATS domains are automatically kept (unless subject was noise above)
+  const isAtsDomain = /(^|\.)(greenhouse\.io|lever\.co|myworkdayjobs\.com|workday\.com|icims\.com|smartrecruiters\.com|successfactors\.com|workablemail\.com)$/.test(domain);
+  if (isAtsDomain) {
+    return false; 
+  }
+  
+  // 4. Check body positive keywords with robust noise exclusion
+  const bodyHasPositive = positiveKeywords.some(keyword => lowerBody.includes(keyword));
+  if (bodyHasPositive) {
+    const bodyHasNoise = (lowerBody.includes('weekly application update') || 
+                          lowerBody.includes('jobs you may be interested in') || 
+                          lowerBody.includes('job alert') ||
+                          lowerBody.includes('password reset')) &&
+                         !lowerBody.includes('your application was sent') &&
+                         !lowerBody.includes('thank you for applying') &&
+                         !lowerBody.includes('thank you for your application') &&
+                         !lowerBody.includes('application received') &&
+                         !lowerBody.includes('we received your application') &&
+                         !lowerBody.includes('application submitted') &&
+                         !lowerBody.includes('successfully applied') &&
+                         !lowerBody.includes('interview');
+                         
+    if (!bodyHasNoise) {
+      return false; // Keep valid body confirmation without general newsletter patterns
+    }
+  }
+  
+  // 5. Default: skip to prevent newsletter leakage
+  return true;
 }
 function shouldSkipThread(thread) { const messages = thread.getMessages(); const message = messages[0]; return shouldSkipMessage(message.getSubject(), message.getFrom(), message.getPlainBody()); }
