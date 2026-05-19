@@ -5,6 +5,41 @@ const GEMINI_CONFIG = {
 };
 
 const GeminiClient = {
+  /**
+   * Helper to fetch REST request with exponential backoff on 429/503/500 errors
+   */
+  fetchWithRetry: function(url, options, maxRetries = 4) {
+    let delay = 2000; // start with 2 seconds
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const res = UrlFetchApp.fetch(url, options);
+        const code = res.getResponseCode();
+        
+        if (code === 200) {
+          return { success: true, code: code, text: res.getContentText() };
+        }
+        
+        const retryable = (code === 429 || code === 503 || code === 500);
+        if (retryable && attempt < maxRetries) {
+          Logger.log(`API returned code ${code}. Retrying in ${delay}ms (Attempt ${attempt + 1}/${maxRetries})...`);
+          Utilities.sleep(delay);
+          delay *= 2; // double the delay
+          continue;
+        }
+        
+        return { success: false, code: code, text: res.getContentText() };
+      } catch (e) {
+        if (attempt < maxRetries) {
+          Logger.log(`Fetch exception: ${e.toString()}. Retrying in ${delay}ms...`);
+          Utilities.sleep(delay);
+          delay *= 2;
+          continue;
+        }
+        throw e;
+      }
+    }
+  },
+
   classifyBatch: function(threadLogs) {
     if (!threadLogs || threadLogs.length === 0) return [];
     
@@ -60,6 +95,7 @@ const GeminiClient = {
     // Dual Authentication Handshake
     let responseText;
     let success = false;
+    let lastErrorDetails = "";
     
     // Method 1: Try keyless OAuth first
     try {
@@ -77,39 +113,49 @@ const GeminiClient = {
         muteHttpExceptions: true
       };
       
-      const res = UrlFetchApp.fetch(url, options);
-      const code = res.getResponseCode();
-      if (code === 200) {
-        responseText = res.getContentText();
+      const fetchResult = this.fetchWithRetry(url, options);
+      if (fetchResult.success) {
+        responseText = fetchResult.text;
         success = true;
       } else {
-        Logger.log(`OAuth attempt returned code ${code}: ${res.getContentText()}`);
+        lastErrorDetails = `OAuth attempt returned code ${fetchResult.code}: ${fetchResult.text}`;
+        Logger.log(lastErrorDetails);
       }
     } catch (e) {
-      Logger.log("OAuth generative REST call failed, attempting API key fallback. Error: " + e.toString());
+      lastErrorDetails = "OAuth generative REST call failed. Error: " + e.toString();
+      Logger.log(lastErrorDetails);
     }
 
     // Method 2: Fallback to stored API key
     if (!success) {
       const apiKey = PropertiesService.getScriptProperties().getProperty(GEMINI_CONFIG.apiKeyProperty);
-      if (!apiKey) {
-        throw new Error("Generative Language API call failed: OAuth was rejected and no gemini_api_key script property is configured.");
+      if (apiKey) {
+        const url = `https://generativelanguage.googleapis.com/v1beta/${GEMINI_CONFIG.model}:generateContent?key=${apiKey}`;
+        const options = {
+          method: 'post',
+          contentType: 'application/json',
+          payload: JSON.stringify(payload),
+          muteHttpExceptions: true
+        };
+        
+        try {
+          const fetchResult = this.fetchWithRetry(url, options);
+          if (fetchResult.success) {
+            responseText = fetchResult.text;
+            success = true;
+          } else {
+            lastErrorDetails = `API Key attempt returned code ${fetchResult.code}: ${fetchResult.text}`;
+            Logger.log(lastErrorDetails);
+          }
+        } catch (e) {
+          lastErrorDetails = "API Key generative REST call failed. Error: " + e.toString();
+          Logger.log(lastErrorDetails);
+        }
       }
-      
-      const url = `https://generativelanguage.googleapis.com/v1beta/${GEMINI_CONFIG.model}:generateContent?key=${apiKey}`;
-      const options = {
-        method: 'post',
-        contentType: 'application/json',
-        payload: JSON.stringify(payload),
-        muteHttpExceptions: true
-      };
-      
-      const res = UrlFetchApp.fetch(url, options);
-      const code = res.getResponseCode();
-      if (code !== 200) {
-        throw new Error(`Generative Language REST call failed with code ${code}: ${res.getContentText()}`);
-      }
-      responseText = res.getContentText();
+    }
+
+    if (!success) {
+      throw new Error(`Generative Language API call failed after trying OAuth and API Key fallbacks. Details:\n${lastErrorDetails}`);
     }
 
     // Parse the structured model response
