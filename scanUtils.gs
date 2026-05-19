@@ -70,9 +70,19 @@ function isPositiveApplicationSignal_(haystack, domain) {
   if (haystack.includes('we received your application')) return true;
   if (haystack.includes('thank you for applying')) return true;
   if (haystack.includes('thank you for your application')) return true;
+  if (haystack.includes('thank you for your interest')) return true;
+  if (haystack.includes('thank you for taking the time to apply')) return true;
   if (haystack.includes('interview')) return true;
   if (haystack.includes('assessment')) return true;
   if (haystack.includes('coding challenge')) return true;
+  if (haystack.includes('not moving forward')) return true;
+  if (haystack.includes('regret to inform')) return true;
+  if (haystack.includes('other candidates')) return true;
+  if (haystack.includes('unable to offer')) return true;
+  if (haystack.includes('congratulations')) return true;
+  if (haystack.includes('offer letter')) return true;
+  
+  // Match standard job ATS/candidate platform domains
   return /(^|\.)(greenhouse\.io|lever\.co|myworkdayjobs\.com|workday\.com|icims\.com|smartrecruiters\.com|indeed\.com|successfactors\.com|workablemail\.com|linkedin\.com)$/.test(domain);
 }
 
@@ -98,12 +108,19 @@ function senderDomain_(from) { const match = String(from || '').match(/@([^>\s]+
 function shouldSkipMessage(subject, from, body) {
   const haystack = (String(subject || '') + ' ' + String(body || '')).toLowerCase();
   const domain = senderDomain_(from);
-  if (domain === 'jobs-listings.linkedin.com') return true;
-  if (isPositiveApplicationSignal_(haystack, domain)) return false;
+  
+  // High-confidence noise skips
+  if (domain === 'jobs-listings.linkedin.com' || domain === 'jobs-listings@linkedin.com') return true;
   if (haystack.includes('weekly application update') || haystack.includes('jobs you may be interested in')) return true;
-  if (haystack.includes('digest') || haystack.includes('unsubscribe')) return true;
   if (haystack.includes('password reset')) return true;
   if (haystack.includes('calendar notification') && !haystack.includes('interview')) return true;
-  return false;
+  
+  // If it's a positive application signal (Applied, Interview, Assessment, Offer, Rejection)
+  if (isPositiveApplicationSignal_(haystack, domain)) {
+    return false; // Do not skip! Keep this email.
+  }
+  
+  // If it doesn't match any positive signal, skip it by default (to filter out newsletters/security alerts)
+  return true; 
 }
 function shouldSkipThread(thread) { const messages = thread.getMessages(); const message = messages[0]; return shouldSkipMessage(message.getSubject(), message.getFrom(), message.getPlainBody()); }
