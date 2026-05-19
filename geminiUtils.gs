@@ -48,13 +48,17 @@ const GeminiClient = {
       "Analyze the email sender (f), subject (s), and snippet (sn) to classify the email. " +
       "Definitions:\n" +
       "- APPLIED: Direct application confirmations.\n" +
-      "- INTERVIEW: Invites or scheduling outreach.\n" +
+      "- INTERVIEW: Invites, scheduling outreach, or direct recruiter contact.\n" +
       "- ASSESSMENT: Coding tests, evaluations, or screenings.\n" +
-      "- REJECTED: Rejections or no longer considering updates.\n" +
+      "- REJECTED: Rejections, not moving forward updates, or position closed notifications.\n" +
       "- OFFER: Selected for role alerts, contracts, or offer letters.\n" +
       "- NOISE: Substack/Medium digests, Zillow rentals, bank marketing, password resets, general LinkedIn/Indeed recommendations.\n\n" +
+      "CRITICAL Guardrails:\n" +
+      "1. Only classify actual employment/job applications. Applications for financial aid, loans, credit cards, income support, housing, or student portals are NOT job-related and must be classified as NOISE.\n" +
+      "2. LinkedIn or Indeed notifications saying 'your application was viewed', 'viewed by', or 'new application updates' are NOISE. They are not direct job applications, interviews, or rejections.\n" +
+      "3. Look for rejection phrases like 'not moving forward', 'pursue other candidates', 'decided to proceed with others', or 'position has been filled' in the snippet, even if they follow standard greetings. If present, classification MUST be REJECTED.\n\n" +
       "Return a JSON object containing a results array of the exact same size. " +
-      "You MUST output the exact input 'id' anchor for every result.";
+      "You MUST output the exact input 'idx' index anchor for every result.";
 
     const promptText = systemInstruction + "\n\nInput JSON:\n" + JSON.stringify(threadLogs);
     
@@ -65,6 +69,7 @@ const GeminiClient = {
       generationConfig: {
         responseMimeType: "application/json",
         maxOutputTokens: 16384,
+        temperature: 0.0,
         responseSchema: {
           type: "OBJECT",
           properties: {
@@ -73,7 +78,7 @@ const GeminiClient = {
               items: {
                 type: "OBJECT",
                 properties: {
-                  id: { type: "STRING" },
+                  idx: { type: "STRING" },
                   rel: { type: "BOOLEAN" },
                   cat: { 
                     type: "STRING", 
@@ -84,7 +89,7 @@ const GeminiClient = {
                   co: { type: "STRING" },
                   ti: { type: "STRING" }
                 },
-                required: ["id", "rel", "cat", "rea"]
+                required: ["idx", "rel", "cat", "rea"]
               }
             }
           }
