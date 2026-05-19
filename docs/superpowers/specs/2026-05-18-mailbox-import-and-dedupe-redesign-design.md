@@ -27,15 +27,15 @@ To support clean backfills from the beginning of the mailbox, we will add the fo
 
 In `scanUtils.gs`, we will remove `-category:promotions` and `-label:social` from the default query exclusions. Because Gmail categorizes many legitimate confirmation receipts as promotions, retaining this exclusion was causing false negatives.
 
-### 5. Uncapped Paging Diagnostic Audit Tool
+### 5. Strict Query Mailbox Diagnostic Audit Tool
 
-We will implement paging inside `runDiagnosticMailboxAudit()` using a paging loop in blocks of 500 threads until the Gmail API returns 0 results. This allows counting the true, uncapped size of the mailbox.
+We will implement a uncapped paging diagnostic audit script in `runDiagnosticMailboxAudit()` running over the strict query. This calculates the true count of actual applications in seconds (safely avoiding 6-minute timeouts) and analyzes details for a safe sample of 100 threads.
 
-### 6. Opt-In Noise Filtering
+### 6. Refined Opt-In Noise Filtering
 
 We will transition the noise filter to an **opt-in / allowlist model**:
 - An email is only kept if it contains a **high-confidence job application signal** (representing a confirmation, interview invitation, assessment, offer, or rejection) OR is sent from a **known ATS domain** (Lever, Greenhouse, Workday, etc.).
-- If it is just a generic email matching the broad search (like a newsletter talking about Claude Code or Grab's AI agents), and contains no confirmation/interview/rejection keywords, it will be **skipped by default**.
+- `linkedin.com` and `indeed.com` will require specific positive confirmation keywords to pass, filtering out standard marketing notifications.
 
 ## Success Criteria
 
