@@ -46,56 +46,129 @@ Confirm state reset handlers are available. (Completed)
 
 ---
 
-### Task 4: Opt-In Noise Filter Conversion
+### Task 4: Precise Noise Filter & Extended ATS Domains
 
 **Files:**
 - Modify: `/Users/tmaerz/projects/AppTrack-GScript/scanUtils.gs`
 
-- [ ] **Step 1: Convert noise filter to Opt-In model**
-In `scanUtils.gs`, refine the keyword checks in `isPositiveApplicationSignal_` and default skip rules in `shouldSkipMessage`. (Completed)
+- [ ] **Step 1: Add helper `isHighConfidenceSubject_` and update `isAtsDomain`**
+Add the helper to scanUtils.gs to immediately allow high-confidence subjects (e.g. including rejections, assessments, and confirmation phrases combined with connector prepositions) and expand the list of trusted ATS domains.
 
-- [ ] **Step 2: Restrict Indeed/LinkedIn domain matching in `isPositiveApplicationSignal_`**
-Emails from general domains like `linkedin.com` or `indeed.com` must have high-confidence subject/body keywords to pass, to prevent marketing updates and billing notices from passing.
-
-Replace lines 58-79 in `scanUtils.gs` with:
+In `scanUtils.gs`, replace `shouldSkipMessage` and `isPositiveApplicationSignal_` with:
 ```javascript
-function buildBroadGmailSearchQuery(window) {
-  return '(application OR applied OR interview OR recruiter OR careers OR hiring OR "for applying" OR "application submitted" OR "your application") ' + buildDateWindowFilter(window);
-}
-
-function buildAtsGmailSearchQuery(window) {
-  return 'from:(greenhouse.io OR lever.co OR workday.com OR myworkdayjobs.com OR icims.com OR smartrecruiters.com OR workablemail.com OR successfactors.com) ' + buildDateWindowFilter(window);
-}
-
-function isPositiveApplicationSignal_(haystack, domain) {
-  if (haystack.includes('your application was sent')) return true;
-  if (haystack.includes('application submitted')) return true;
-  if (haystack.includes('successfully applied')) return true;
-  if (haystack.includes('application received')) return true;
-  if (haystack.includes('we received your application')) return true;
-  if (haystack.includes('thank you for applying')) return true;
-  if (haystack.includes('thank you for your application')) return true;
-  if (haystack.includes('thank you for your interest')) return true;
-  if (haystack.includes('thank you for taking the time to apply')) return true;
-  if (haystack.includes('interview')) return true;
-  if (haystack.includes('assessment')) return true;
-  if (haystack.includes('coding challenge')) return true;
-  if (haystack.includes('not moving forward')) return true;
-  if (haystack.includes('regret to inform')) return true;
-  if (haystack.includes('other candidates')) return true;
-  if (haystack.includes('unable to offer')) return true;
-  if (haystack.includes('congratulations')) return true;
-  if (haystack.includes('offer letter')) return true;
+function isHighConfidenceSubject_(lowerSubject) {
+  const hasAppPattern = lowerSubject.includes('application') || 
+                        lowerSubject.includes('applied') || 
+                        lowerSubject.includes('applying');
+                        
+  if (hasAppPattern) {
+    const hasConnector = lowerSubject.includes('received') ||
+                         lowerSubject.includes('submitted') ||
+                         lowerSubject.includes('sent') ||
+                         lowerSubject.includes('confirm') ||
+                         lowerSubject.includes('thanks') ||
+                         lowerSubject.includes('thank you') ||
+                         lowerSubject.includes('interest') ||
+                         lowerSubject.includes('status') ||
+                         lowerSubject.includes('update') ||
+                         lowerSubject.includes('at ') ||
+                         lowerSubject.includes('to ') ||
+                         lowerSubject.includes('for ') ||
+                         lowerSubject.includes('with ');
+    if (hasConnector) return true;
+  }
   
-  // Greenhouse, Lever, Workday, workable, smartrecruiters, icims, successfactors, etc.
-  return /(^|\.)(greenhouse\.io|lever\.co|myworkdayjobs\.com|workday\.com|icims\.com|smartrecruiters\.com|successfactors\.com|workablemail\.com)$/.test(domain);
+  // Specific absolute keywords
+  const absoluteKeywords = [
+    'interview',
+    'schedule a time',
+    'coding challenge',
+    'assessment',
+    'regret to inform',
+    'not moving forward',
+    'congratulations',
+    'offer letter'
+  ];
+  
+  return absoluteKeywords.some(keyword => lowerSubject.includes(keyword));
+}
+
+function shouldSkipMessage(subject, from, body) {
+  const lowerSubject = String(subject || '').toLowerCase();
+  const lowerBody = String(body || '').toLowerCase();
+  const domain = senderDomain_(from);
+  
+  // 1. High-confidence subject check (never skip real confirmation subjects)
+  if (isHighConfidenceSubject_(lowerSubject)) {
+    return false; // Keep it immediately!
+  }
+  
+  // 2. High-confidence subject noise skips
+  if (domain === 'jobs-listings.linkedin.com' || domain === 'jobs-listings@linkedin.com') return true;
+  if (lowerSubject.includes('weekly application update') || 
+      lowerSubject.includes('jobs you may be interested in') ||
+      lowerSubject.includes('job alert') ||
+      lowerSubject.includes('weekly') ||
+      lowerSubject.includes('digest') ||
+      lowerSubject.includes('password reset') ||
+      lowerSubject.includes('security alert') ||
+      (lowerSubject.includes('calendar notification') && !lowerSubject.includes('interview'))) {
+    return true; 
+  }
+  
+  // 3. Trusted ATS domains are automatically kept (unless subject was noise above)
+  const isAtsDomain = /(^|\.)(greenhouse\.io|lever\.co|myworkdayjobs\.com|workday\.com|icims\.com|smartrecruiters\.com|successfactors\.com|workablemail\.com|ashbyhq\.com|recruitee\.com|breezy\.hr|jazzhr\.com|bamboohr\.com|workable\.com|jobvite\.com|oracle\.com|ukg\.com|paycor\.com|paylocity\.com|adp\.com|rippling\.com|darwinbox\.com|phenom\.com|avature\.net)$/i.test(domain);
+  if (isAtsDomain) {
+    return false; 
+  }
+  
+  // 4. Check body positive keywords with robust noise exclusion
+  const positiveKeywords = [
+    'your application was sent',
+    'application submitted',
+    'successfully applied',
+    'application received',
+    'we received your application',
+    'thank you for applying',
+    'thank you for your application',
+    'thank you for your interest',
+    'thanks for applying',
+    'thanks for your application',
+    'thanks for your interest',
+    'interview',
+    'assessment',
+    'coding challenge',
+    'not moving forward',
+    'regret to inform',
+    'congratulations',
+    'offer letter'
+  ];
+  
+  const bodyHasPositive = positiveKeywords.some(keyword => lowerBody.includes(keyword));
+  if (bodyHasPositive) {
+    const bodyHasNoise = (lowerBody.includes('weekly application update') || 
+                          lowerBody.includes('jobs you may be interested in') || 
+                          lowerBody.includes('job alert') ||
+                          lowerBody.includes('password reset')) &&
+                         !lowerBody.includes('your application was sent') &&
+                         !lowerBody.includes('thank you for applying') &&
+                         !lowerBody.includes('thanks for applying') &&
+                         !lowerBody.includes('interview');
+                         
+    if (!bodyHasNoise) {
+      return false; // Keep valid body confirmation
+    }
+  }
+  
+  // 5. Default: skip to prevent newsletter leakage
+  return true;
 }
 ```
 
-- [ ] **Step 3: Commit changes**
+- [ ] **Step 2: Commit changes**
 ```bash
 git add scanUtils.gs
-git commit -m "fix: restrict isPositiveApplicationSignal to trusted ATS platforms"
+git commit -m "fix: convert noise filter to robust tiered opt-in filter with expanded ATS domains"
 ```
 
 ---
@@ -105,99 +178,8 @@ git commit -m "fix: restrict isPositiveApplicationSignal to trusted ATS platform
 **Files:**
 - Modify: `/Users/tmaerz/projects/AppTrack-GScript/main.gs`
 
-- [ ] **Step 1: Refactor `runDiagnosticMailboxAudit` to execute over strict query**
-Modify the diagnostic audit tool in `main.gs` to page over the Strict query across the entire mailbox and safely limit detailed analysis to 100 threads to prevent execution limit issues.
-
-In `main.gs`, replace `runDiagnosticMailboxAudit()` with:
-```javascript
-function runDiagnosticMailboxAudit() {
-  const signalGroup = '(subject:("thank you for applying" OR "thank you for your application" OR "your application was sent" OR "application submitted" OR "successfully applied" OR "your application to" OR "your application for" OR "application received" OR "we received your application" OR "confirmation of your application" OR "interview invitation" OR "schedule interview" OR assessment OR "coding challenge" OR "job offer" OR "status update" OR "regarding your application") OR body:("thank you for your interest" OR "your application was sent" OR "application submitted" OR "successfully applied" OR "your application to" OR "your application for") OR from:(@talent OR @careers OR @jobs OR @hr OR @recruiting OR @hire OR jobs-noreply@linkedin.com OR candidates.workablemail.com OR @inbound.workablemail.com OR greenhouse.io OR lever.co OR myworkdayjobs.com OR workday.com OR icims.com OR smartrecruiters.com OR indeed.com OR successfactors.com))';
-  const exclusions = '-from:jobs-listings@linkedin.com -from:@glassdoor.com -subject:"password reset" -subject:"weekly application update" -subject:digest';
-  const fullStrictQuery = signalGroup + ' ' + exclusions;
-  
-  Logger.log('Starting Diagnostic Mailbox Audit (Strict Query, Uncapped)...');
-  Logger.log('Strict query: ' + fullStrictQuery);
-  
-  let allThreads = [];
-  let page = 0;
-  const pageSize = 500;
-  
-  while (true) {
-    let threadsPage;
-    try {
-      threadsPage = GmailApp.search(fullStrictQuery, page * pageSize, pageSize);
-    } catch (e) {
-      Logger.log(`Failed to execute search at page ${page}: ` + e.toString());
-      break;
-    }
-    
-    if (!threadsPage || threadsPage.length === 0) {
-      break;
-    }
-    
-    allThreads = allThreads.concat(threadsPage);
-    Logger.log(`Fetched page ${page + 1}: found ${threadsPage.length} threads (Cumulative: ${allThreads.length})`);
-    
-    if (threadsPage.length < pageSize) {
-      break; // Last page reached
-    }
-    
-    page++;
-    Utilities.sleep(100); // Avoid rate limiting
-  }
-  
-  Logger.log('Total threads matching strict query: ' + allThreads.length);
-  
-  let skippedCount = 0;
-  let parsedCount = 0;
-  
-  // Cap detailed sample analysis at 100 to prevent execution timeout
-  const sampleLimit = Math.min(allThreads.length, 100);
-  Logger.log(`Analyzing details for a sample of the first ${sampleLimit} threads...`);
-  
-  for (let i = 0; i < sampleLimit; i++) {
-    const thread = allThreads[i];
-    const messages = thread.getMessages();
-    if (messages.length === 0) continue;
-    
-    const firstMsg = messages[0];
-    const subject = firstMsg.getSubject();
-    const from = firstMsg.getFrom();
-    const body = firstMsg.getPlainBody();
-    
-    const skip = shouldSkipMessage(subject, from, body);
-    
-    if (skip) {
-      skippedCount++;
-      if (skippedCount <= 20) {
-        Logger.log(`[SKIP] From: ${from} | Subject: ${subject}`);
-      }
-    } else {
-      parsedCount++;
-      if (parsedCount <= 20) {
-        const company = CompanyUtils.extractCompany(subject, body, from, firstMsg.getBody());
-        const rawJobTitle = JobUtils.extractJobTitle(subject, body, from, firstMsg.getBody());
-        const jobTitle = JobUtils.cleanJobTitle(rawJobTitle);
-        Logger.log(`[PASS] From: ${from} | Subject: ${subject} => Co: ${company} | Title: ${jobTitle}`);
-      }
-    }
-  }
-  
-  Logger.log(`Diagnostic Complete!`);
-  Logger.log(`Total matching threads: ${allThreads.length}`);
-  Logger.log(`Sample analyzed: ${sampleLimit}`);
-  Logger.log(`Sample matched (parsed): ${parsedCount}`);
-  Logger.log(`Sample skipped (noise filter): ${skippedCount}`);
-  
-  SpreadsheetApp.getActive().toast(`Diagnostic Complete: Found ${allThreads.length} total strict matches! (Sample analyzed: ${sampleLimit})`);
-}
-```
-
-- [ ] **Step 2: Commit changes**
-```bash
-git add main.gs
-git commit -m "feat: run mailbox diagnostic audit over the strict query"
-```
+- [ ] **Step 1: Verify the uncapped diagnostic audit**
+Ensure `runDiagnosticMailboxAudit` loops uncapped and runs completely. (Completed)
 
 ---
 

@@ -49,7 +49,7 @@ function getHigherPriorityStatus(currentStatus, candidateStatus) {
 }
 
 function buildGmailSearchQuery(mode, window) {
-  const signalGroup = '(subject:("thank you for applying" OR "thank you for your application" OR "your application was sent" OR "application submitted" OR "successfully applied" OR "your application to" OR "your application for" OR "application received" OR "we received your application" OR "confirmation of your application" OR "interview invitation" OR "schedule interview" OR assessment OR "coding challenge" OR "job offer" OR "status update" OR "regarding your application" OR "thank you for your interest" OR "thank you in your interest" OR "update on your candidacy") OR body:("thank you for your interest" OR "your application was sent" OR "application submitted" OR "successfully applied" OR "your application to" OR "your application for") OR from:(@talent OR @careers OR @jobs OR @hr OR @recruiting OR @hire OR jobs-noreply@linkedin.com OR candidates.workablemail.com OR @inbound.workablemail.com OR greenhouse.io OR greenhouse-mail.io OR lever.co OR myworkdayjobs.com OR myworkday.com OR workday.com OR icims.com OR smartrecruiters.com OR indeed.com OR successfactors.com))';
+  const signalGroup = '(subject:("thank you for applying" OR "thanks for applying" OR "thank you for your application" OR "thanks for your application" OR "your application was sent" OR "application submitted" OR "successfully applied" OR "your application to" OR "your application for" OR "application received" OR "we received your application" OR "confirmation of your application" OR "interview invitation" OR "schedule interview" OR "interview scheduling" OR "scheduling request" OR "interview request" OR "candidacy update" OR "application status" OR assessment OR "coding challenge" OR "job offer" OR "status update" OR "regarding your application" OR "thank you for your interest" OR "thank you in your interest" OR "update on your candidacy") OR body:("thank you for your interest" OR "thank you for applying" OR "thanks for applying" OR "thank you for your application" OR "thanks for your application" OR "received your application" OR "application has been received" OR "your application was sent" OR "application submitted" OR "successfully applied" OR "your application to" OR "your application for" OR "interview scheduling" OR "interview request" OR "scheduling request" OR "schedule your interview") OR from:(@talent OR @careers OR @jobs OR @hr OR @recruiting OR @hire OR jobs-noreply@linkedin.com OR candidates.workablemail.com OR @inbound.workablemail.com OR greenhouse.io OR greenhouse-mail.io OR lever.co OR myworkdayjobs.com OR myworkday.com OR workday.com OR icims.com OR smartrecruiters.com OR indeed.com OR successfactors.com))';
   const exclusions = '-from:jobs-listings@linkedin.com -from:@glassdoor.com -subject:"password reset" -subject:"weekly application update" -subject:digest';
   return signalGroup + ' ' + exclusions + ' ' + buildDateWindowFilter(window);
 }
@@ -184,7 +184,7 @@ function shouldSkipMessage(subject, from, body) {
   }
 
   // E. LinkedIn Alert & Suggestion Absolute Exclusions
-  if (domain === 'jobs-listings.linkedin.com' || domain === 'jobs-listings@linkedin.com' || fromLower.includes('jobs-noreply@linkedin.com')) {
+  if (fromLower.includes('jobs-listings') || fromLower.includes('jobs-noreply') || fromLower.includes('jobalerts-noreply')) {
     if (lowerSubject.includes('apply now to') ||
         lowerSubject.includes('apply to') ||
         lowerSubject.includes('looking for a new job') ||
@@ -225,17 +225,32 @@ function shouldSkipMessage(subject, from, body) {
     }
   }
 
-  // H. High-confidence subject check
+  // H. Job Board / Aggregator Strict Filtering
+  const jobBoardDomains = ['indeed.com', 'linkedin.com', 'theladders.com', 'ladders.com', 'glassdoor.com'];
+  const isJobBoard = jobBoardDomains.some(d => domain === d || domain.endsWith('.' + d));
+  if (isJobBoard) {
+    const isRescued = (
+      domain === 'indeedapply.indeed.com' ||
+      fromLower.includes('indeedapply@indeed.com') ||
+      lowerSubject.startsWith('indeed application:') ||
+      isHighConfidenceSubject_(lowerSubject)
+    );
+    if (!isRescued) {
+      return true; // Skip general job board newsletters/recommendations/alerts
+    }
+  }
+
+  // I. High-confidence subject check
   if (isHighConfidenceSubject_(lowerSubject)) {
     return false; // Keep it immediately!
   }
 
-  // I. Trusted ATS / recruitment domains are automatically kept
+  // J. Trusted ATS / recruitment domains are automatically kept
   if (isRecruitmentDomain) {
     return false; 
   }
 
-  // J. Body positive keywords check
+  // K. Body positive keywords check
   const positiveKeywords = [
     'your application was sent',
     'application submitted',
@@ -283,4 +298,11 @@ function shouldSkipMessage(subject, from, body) {
   }
 
   return true;
+}
+
+function shouldSkipThread(thread) {
+  const messages = thread.getMessages();
+  if (messages.length === 0) return true;
+  const message = messages[0];
+  return shouldSkipMessage(message.getSubject(), message.getFrom(), message.getPlainBody());
 }

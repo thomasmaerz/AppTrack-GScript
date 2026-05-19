@@ -25,7 +25,25 @@ const TestFixtures = {
     subject: 'Application submitted', from: 'no-reply@greenhouse.io',
     body: 'Your application was submitted successfully. You may unsubscribe from recruiting emails.', skip: false
   },
-  malformedTitle: { subject: 'Application received', from: 'jobs@example.com', body: 'application for https://example.com is match', title: 'Unlisted' }
+  malformedTitle: { subject: 'Application received', from: 'jobs@example.com', body: 'application for https://example.com is match', title: 'Unlisted' },
+  shiftTechnologyInterview: {
+    subject: 'Shift Technology - Interview Scheduling Request - [Project Manager]',
+    from: 'Andrea Constantinides <andrea.constantinides@shift-technology.com>',
+    body: 'Hi Thomas, thank you again for applying to our Project Manager role. We have just sent you a first interview request email.',
+    status: 'Interview Request', skip: false
+  },
+  indeedMarketing: {
+    subject: 'Land a job 30% faster with the Indeed app',
+    from: 'Indeed <no-reply@indeed.com>',
+    body: 'Apply for jobs on the go with the Indeed mobile app. Start applying today.',
+    skip: true
+  },
+  laddersMarketing: {
+    subject: 'Unlock $100K+ Job Opportunities Today!',
+    from: 'Ladders <jobs@my.theladders.com>',
+    body: 'Improve your interview skills and start applying to premium jobs. Get hired today.',
+    skip: true
+  }
 };
 
 function assertTrackerEqual(actual, expected, label) {
@@ -37,6 +55,10 @@ function runTrackerTests() {
   assertTrackerEqual(shouldSkipMessage(f.linkedInDigest.subject, f.linkedInDigest.from, f.linkedInDigest.body), true, 'LinkedIn digest skipped');
   assertTrackerEqual(shouldSkipMessage(f.linkedInConfirmation.subject, f.linkedInConfirmation.from, f.linkedInConfirmation.body), false, 'LinkedIn confirmation retained');
   assertTrackerEqual(shouldSkipMessage(f.atsConfirmationWithUnsubscribe.subject, f.atsConfirmationWithUnsubscribe.from, f.atsConfirmationWithUnsubscribe.body), false, 'ATS confirmation with unsubscribe retained');
+  assertTrackerEqual(shouldSkipMessage(f.shiftTechnologyInterview.subject, f.shiftTechnologyInterview.from, f.shiftTechnologyInterview.body), false, 'Shift Technology interview retained');
+  assertTrackerEqual(shouldSkipMessage(f.indeedMarketing.subject, f.indeedMarketing.from, f.indeedMarketing.body), true, 'Indeed marketing skipped');
+  assertTrackerEqual(shouldSkipMessage(f.laddersMarketing.subject, f.laddersMarketing.from, f.laddersMarketing.body), true, 'Ladders marketing skipped');
+  assertTrackerEqual(StatusUtils.determineStatus(f.shiftTechnologyInterview.subject, f.shiftTechnologyInterview.body, ''), f.shiftTechnologyInterview.status, 'Shift Technology status');
   assertTrackerEqual(JobUtils.extractJobTitle(f.linkedInConfirmation.subject, f.linkedInConfirmation.body, f.linkedInConfirmation.from, ''), f.linkedInConfirmation.title, 'LinkedIn title');
   assertTrackerEqual(CompanyUtils.extractCompany(f.linkedInConfirmation.subject, f.linkedInConfirmation.body, f.linkedInConfirmation.from, ''), f.linkedInConfirmation.company, 'LinkedIn company');
   assertTrackerEqual(JobUtils.extractJobTitle(f.rogersConfirmation.subject, f.rogersConfirmation.body, f.rogersConfirmation.from, ''), f.rogersConfirmation.title, 'Rogers title');
@@ -62,8 +84,8 @@ function runTrackerTests() {
   assertTrackerEqual(historicalQuery.indexOf('greenhouse.io') !== -1, true, 'query includes Greenhouse ATS domain');
   assertTrackerEqual(buildBroadGmailSearchQuery(historicalWindow).indexOf('"your application"') !== -1, true, 'broad query includes generic application phrase');
   assertTrackerEqual(getGmailSearchStart('recent', historicalQuery), 0, 'recent scans always start at first Gmail page');
-  assertTrackerEqual(shouldStopHistoricalImport({ completed: false, interrupted: false }, 0), false, 'historical import continues full pages');
-  assertTrackerEqual(shouldStopHistoricalImport({ completed: true, interrupted: false }, 0), false, 'historical import continues to next window when page complete');
-  assertTrackerEqual(shouldStopHistoricalImport({ completed: false, interrupted: true }, 0), true, 'historical import stops after interruption');
+  assertTrackerEqual(shouldStopHistoricalImport({ completed: false, interrupted: false }, Date.now()), false, 'historical import continues full pages');
+  assertTrackerEqual(shouldStopHistoricalImport({ completed: true, interrupted: false }, Date.now()), false, 'historical import continues to next window when page complete');
+  assertTrackerEqual(shouldStopHistoricalImport({ completed: false, interrupted: true }, Date.now()), true, 'historical import stops after interruption');
   return 'All tracker tests passed';
 }

@@ -29,13 +29,13 @@ In `scanUtils.gs`, we will remove `-category:promotions` and `-label:social` fro
 
 ### 5. Strict Query Mailbox Diagnostic Audit Tool
 
-We will implement a uncapped paging diagnostic audit script in `runDiagnosticMailboxAudit()` running over the strict query. This calculates the true count of actual applications in seconds (safely avoiding 6-minute timeouts) and analyzes details for a safe sample of 100 threads.
+We will implement a uncapped paging diagnostic audit script in `runDiagnosticMailboxAudit()` running over the strict query. This calculates the true count of actual applications in seconds (safely avoiding 6-minute timeouts) and analyzes details for all threads.
 
-### 6. Refined Opt-In Noise Filtering
+### 6. Refined Opt-In Noise Filtering & Expanded ATS Domains
 
 We will transition the noise filter to an **opt-in / allowlist model**:
-- An email is only kept if it contains a **high-confidence job application signal** (representing a confirmation, interview invitation, assessment, offer, or rejection) OR is sent from a **known ATS domain** (Lever, Greenhouse, Workday, etc.).
-- `linkedin.com` and `indeed.com` will require specific positive confirmation keywords to pass, filtering out standard marketing notifications.
+- An email is only kept if it contains a **high-confidence job application signal** in the subject or is sent from a **known ATS domain**.
+- The list of trusted ATS domains is expanded to include: Greenhouse, Lever, Workday, workable, smartrecruiters, successfactors, workablemail, ashbyhq, recruitee, breezy.hr, jazzhr, bamboohr, jobvite, oracle, ukg, paycor, paylocity, adp, rippling, darwinbox, phenom, avature.
 
 ## Success Criteria
 

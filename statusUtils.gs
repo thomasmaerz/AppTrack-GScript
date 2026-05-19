@@ -88,6 +88,13 @@ const StatusUtils = {
       "speak with you",
       "invite you to meet",
       "interview preparation",
+      "interview request",
+      "interview scheduling",
+      "schedule your interview",
+      "schedule an interview",
+      "scheduling request",
+      "interview invite",
+      "invitation to interview"
     ];
     
     return interviewIndicators.some(indicator => content.includes(indicator));
