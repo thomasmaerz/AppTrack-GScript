@@ -931,7 +931,15 @@ function runGeminiBroadGapAudit() {
   
   // Batch fetch all message arrays in a single network round-trip!
   Logger.log('Batch fetching message lists for all threads...');
-  const messages2D = GmailApp.getMessagesForThreads(threads);
+  // Batch fetch all message arrays in chunks of at most 500 threads to avoid Google API limit!
+  Logger.log('Batch fetching message lists for all threads in chunks of 500...');
+  let messages2D = [];
+  const chunkLimit = 500;
+  for (let i = 0; i < threads.length; i += chunkLimit) {
+    const chunk = threads.slice(i, i + chunkLimit);
+    const chunkMessages = GmailApp.getMessagesForThreads(chunk);
+    messages2D = messages2D.concat(chunkMessages);
+  }
   
   // 2. Map thread metadata & extract regex decisions
   const threadLogs = [];
