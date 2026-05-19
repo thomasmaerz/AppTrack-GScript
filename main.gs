@@ -683,12 +683,12 @@ function resetAllTrackerState() {
 }
 
 function runDiagnosticMailboxAudit() {
-  const broadQuery = '(application OR applied OR interview OR recruiter OR careers OR hiring OR "for applying" OR "application submitted" OR "your application")';
+  const signalGroup = '(subject:("thank you for applying" OR "thank you for your application" OR "your application was sent" OR "application submitted" OR "successfully applied" OR "your application to" OR "your application for" OR "application received" OR "we received your application" OR "confirmation of your application" OR "interview invitation" OR "schedule interview" OR assessment OR "coding challenge" OR "job offer" OR "status update" OR "regarding your application") OR body:("thank you for your interest" OR "your application was sent" OR "application submitted" OR "successfully applied" OR "your application to" OR "your application for") OR from:(@talent OR @careers OR @jobs OR @hr OR @recruiting OR @hire OR jobs-noreply@linkedin.com OR candidates.workablemail.com OR @inbound.workablemail.com OR greenhouse.io OR lever.co OR myworkdayjobs.com OR workday.com OR icims.com OR smartrecruiters.com OR indeed.com OR successfactors.com))';
   const exclusions = '-from:jobs-listings@linkedin.com -from:@glassdoor.com -subject:"password reset" -subject:"weekly application update" -subject:digest';
-  const fullBroadQuery = broadQuery + ' ' + exclusions;
+  const fullStrictQuery = signalGroup + ' ' + exclusions;
   
-  Logger.log('Starting Diagnostic Mailbox Audit (Uncapped)...');
-  Logger.log('Broad query: ' + fullBroadQuery);
+  Logger.log('Starting Diagnostic Mailbox Audit (Strict Query, Uncapped)...');
+  Logger.log('Strict query: ' + fullStrictQuery);
   
   let allThreads = [];
   let page = 0;
@@ -697,7 +697,7 @@ function runDiagnosticMailboxAudit() {
   while (true) {
     let threadsPage;
     try {
-      threadsPage = GmailApp.search(fullBroadQuery, page * pageSize, pageSize);
+      threadsPage = GmailApp.search(fullStrictQuery, page * pageSize, pageSize);
     } catch (e) {
       Logger.log(`Failed to execute search at page ${page}: ` + e.toString());
       break;
@@ -718,12 +718,16 @@ function runDiagnosticMailboxAudit() {
     Utilities.sleep(100); // Avoid rate limiting
   }
   
-  Logger.log('Total threads matching broad query: ' + allThreads.length);
+  Logger.log('Total threads matching strict query: ' + allThreads.length);
   
   let skippedCount = 0;
   let parsedCount = 0;
   
-  for (let i = 0; i < allThreads.length; i++) {
+  // Cap detailed sample analysis at 100 to prevent execution timeout
+  const sampleLimit = Math.min(allThreads.length, 100);
+  Logger.log(`Analyzing details for a sample of the first ${sampleLimit} threads...`);
+  
+  for (let i = 0; i < sampleLimit; i++) {
     const thread = allThreads[i];
     const messages = thread.getMessages();
     if (messages.length === 0) continue;
@@ -752,9 +756,10 @@ function runDiagnosticMailboxAudit() {
   }
   
   Logger.log(`Diagnostic Complete!`);
-  Logger.log(`Total threads analyzed: ${allThreads.length}`);
-  Logger.log(`Threads matched (parsed): ${parsedCount}`);
-  Logger.log(`Threads skipped (noise filter): ${skippedCount}`);
+  Logger.log(`Total matching threads: ${allThreads.length}`);
+  Logger.log(`Sample analyzed: ${sampleLimit}`);
+  Logger.log(`Sample matched (parsed): ${parsedCount}`);
+  Logger.log(`Sample skipped (noise filter): ${skippedCount}`);
   
-  SpreadsheetApp.getActive().toast(`Diagnostic Complete: Found ${allThreads.length} total, Parsed ${parsedCount}, Skipped ${skippedCount}`);
+  SpreadsheetApp.getActive().toast(`Diagnostic Complete: Found ${allThreads.length} total strict matches! (Sample analyzed: ${sampleLimit})`);
 }
