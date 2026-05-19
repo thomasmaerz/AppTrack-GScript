@@ -50,7 +50,7 @@ function getHigherPriorityStatus(currentStatus, candidateStatus) {
 
 function buildGmailSearchQuery(mode, window) {
   const signalGroup = '(subject:("thank you for applying" OR "thank you for your application" OR "your application was sent" OR "application submitted" OR "successfully applied" OR "your application to" OR "your application for" OR "application received" OR "we received your application" OR "confirmation of your application" OR "interview invitation" OR "schedule interview" OR assessment OR "coding challenge" OR "job offer" OR "status update" OR "regarding your application") OR body:("thank you for your interest" OR "your application was sent" OR "application submitted" OR "successfully applied" OR "your application to" OR "your application for") OR from:(@talent OR @careers OR @jobs OR @hr OR @recruiting OR @hire OR jobs-noreply@linkedin.com OR candidates.workablemail.com OR @inbound.workablemail.com OR greenhouse.io OR lever.co OR myworkdayjobs.com OR workday.com OR icims.com OR smartrecruiters.com OR indeed.com OR successfactors.com))';
-  const exclusions = '-from:jobs-listings@linkedin.com -from:@glassdoor.com -label:social -category:promotions -subject:"password reset" -subject:"weekly application update" -subject:digest';
+  const exclusions = '-from:jobs-listings@linkedin.com -from:@glassdoor.com -subject:"password reset" -subject:"weekly application update" -subject:digest';
   return signalGroup + ' ' + exclusions + ' ' + buildDateWindowFilter(window);
 }
 
