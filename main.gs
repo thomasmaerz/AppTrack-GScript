@@ -929,21 +929,25 @@ function runGeminiBroadGapAudit() {
   
   Logger.log(`Found ${threads.length} broad threads to audit.`);
   
+  // Batch fetch all message arrays in a single network round-trip!
+  Logger.log('Batch fetching message lists for all threads...');
+  const messages2D = GmailApp.getMessagesForThreads(threads);
+  
   // 2. Map thread metadata & extract regex decisions
   const threadLogs = [];
   const promptLogs = []; // Ultra-compressed input schema for Gemini
   
-  for (const thread of threads) {
-    const messages = thread.getMessages();
-    if (messages.length === 0) continue;
+  for (let i = 0; i < threads.length; i++) {
+    const thread = threads[i];
+    const messages = messages2D[i];
+    if (!messages || messages.length === 0) continue;
     const firstMsg = messages[0];
     const subject = firstMsg.getSubject();
     const from = firstMsg.getFrom();
-    const body = firstMsg.getPlainBody() || '';
-    const snippet = body.substring(0, 150).replace(/\s+/g, ' ').trim();
+    const snippet = thread.getSnippet() || '';
     
-    // Evaluate Regex classification (PASS vs SKIP)
-    const regexSkip = shouldSkipMessage(subject, from, body);
+    // Evaluate Regex classification (PASS vs SKIP) using snippet instead of full body
+    const regexSkip = shouldSkipMessage(subject, from, snippet);
     const regexDecision = regexSkip ? 'SKIP' : 'PASS';
     
     threadLogs.push({
