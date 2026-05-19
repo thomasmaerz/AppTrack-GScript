@@ -878,12 +878,15 @@ function runBroadSearchGapAudit() {
     if (messages.length === 0) continue;
     const firstMsg = messages[0];
     
+    const bodyText = firstMsg.getPlainBody() || '';
+    const snippet = bodyText.substring(0, 150).replace(/\s+/g, ' ').trim();
+    
     gapCount++;
     gapData.push([
       firstMsg.getDate().toISOString(),
       firstMsg.getFrom(),
       firstMsg.getSubject(),
-      thread.getSnippet(),
+      snippet,
       thread.getId()
     ]);
   }
