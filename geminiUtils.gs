@@ -1,33 +1,25 @@
 const GEMINI_CONFIG = {
   model: 'models/gemini-3.1-flash-lite',
   apiKeyProperty: 'gemini_api_key',
-  batchSize: 20
+  batchSize: 150
 };
 
 const GeminiClient = {
-  /**
-   * Classifies a batch of Gmail thread logs using Gemini 3.1 Flash Lite
-   * @param {Array<Object>} threadLogs - [{ threadId, subject, from, snippet }]
-   * @return {Array<Object>} List of classification results mapping threadId -> classification details
-   */
   classifyBatch: function(threadLogs) {
     if (!threadLogs || threadLogs.length === 0) return [];
     
-    // Construct the structured prompt
     const systemInstruction = 
-      "You are a strict, highly accurate recruitment classification assistant. " +
-      "Your goal is to audit raw email logs to identify valid job application confirmations or transactional status updates " +
-      "versus generic marketing, job recommendations, digest alerts, or password resets. " +
-      "Below is a JSON array of email thread logs. For each log, analyze the subject, from sender, and body snippet, " +
-      "and determine if it is job-related (isJobRelated) and classify it. " +
-      "Exhaustive definitions:\n" +
-      "- APPLIED: Direct, valid confirmations of a submitted application (e.g. Indeed Apply, greenhouse, lever, workday transactional, specific employer confirmations).\n" +
-      "- INTERVIEW: Reaching out to schedule an interview, interview invites, or scheduling requests.\n" +
-      "- ASSESSMENT: Coding tests, skills evaluations, homework, or online screenings.\n" +
-      "- REJECTED: Regret to inform, no longer considering, not moving forward notices.\n" +
-      "- OFFER: Employment contract, offer letter, selected for the position alerts.\n" +
-      "- NOISE: Substack/Medium newsletters, Zillow rentals, password resets, verification codes, or general job recommendations/match alerts from LinkedIn or Indeed.\n\n" +
-      "You MUST return a JSON object containing a results array of the exact same size and matching input threadIds.";
+      "You are a strict recruitment classification assistant. " +
+      "Analyze the email sender (f), subject (s), and snippet (sn) to classify the email. " +
+      "Definitions:\n" +
+      "- APPLIED: Direct application confirmations.\n" +
+      "- INTERVIEW: Invites or scheduling outreach.\n" +
+      "- ASSESSMENT: Coding tests, evaluations, or screenings.\n" +
+      "- REJECTED: Rejections or no longer considering updates.\n" +
+      "- OFFER: Selected for role alerts, contracts, or offer letters.\n" +
+      "- NOISE: Substack/Medium digests, Zillow rentals, bank marketing, password resets, general LinkedIn/Indeed recommendations.\n\n" +
+      "Return a JSON object containing a results array of the exact same size. " +
+      "You MUST output the exact input 'id' anchor for every result.";
 
     const promptText = systemInstruction + "\n\nInput JSON:\n" + JSON.stringify(threadLogs);
     
@@ -37,6 +29,7 @@ const GeminiClient = {
       }],
       generationConfig: {
         responseMimeType: "application/json",
+        maxOutputTokens: 16384,
         responseSchema: {
           type: "OBJECT",
           properties: {
@@ -45,18 +38,18 @@ const GeminiClient = {
               items: {
                 type: "OBJECT",
                 properties: {
-                  threadId: { type: "STRING" },
-                  isJobRelated: { type: "BOOLEAN" },
-                  classification: { 
+                  id: { type: "STRING" },
+                  rel: { type: "BOOLEAN" },
+                  cat: { 
                     type: "STRING", 
                     enum: ["APPLIED", "INTERVIEW", "ASSESSMENT", "REJECTED", "OFFER", "NOISE"] 
                   },
-                  confidence: { type: "STRING", enum: ["HIGH", "MEDIUM", "LOW"] },
-                  reasoning: { type: "STRING" },
-                  cleanCompany: { type: "STRING" },
-                  cleanTitle: { type: "STRING" }
+                  conf: { type: "STRING", enum: ["HIGH", "MEDIUM", "LOW"] },
+                  rea: { type: "STRING" },
+                  co: { type: "STRING" },
+                  ti: { type: "STRING" }
                 },
-                required: ["threadId", "isJobRelated", "classification", "reasoning"]
+                required: ["id", "rel", "cat", "rea"]
               }
             }
           }
