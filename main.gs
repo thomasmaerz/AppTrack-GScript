@@ -719,11 +719,19 @@ function runDiagnosticMailboxAudit() {
   }
   
   Logger.log('Total threads matching strict query: ' + allThreads.length);
+  Logger.log(`Analyzing details for all ${allThreads.length} threads...`);
+  
+  const positiveKeywords = [
+    'your application was sent', 'application submitted', 'successfully applied',
+    'application received', 'we received your application', 'thank you for applying',
+    'thank you for your application', 'thank you for your interest', 'thanks for applying',
+    'thanks for your application', 'thanks for your interest', 'interview',
+    'assessment', 'coding challenge', 'not moving forward', 'regret to inform',
+    'congratulations', 'offer letter'
+  ];
   
   let skippedCount = 0;
   let parsedCount = 0;
-  
-  Logger.log(`Analyzing details for all ${allThreads.length} threads...`);
   
   for (let i = 0; i < allThreads.length; i++) {
     const thread = allThreads[i];
@@ -735,21 +743,33 @@ function runDiagnosticMailboxAudit() {
     const from = firstMsg.getFrom();
     const body = firstMsg.getPlainBody();
     
+    const lowerSubject = subject.toLowerCase();
+    const lowerBody = body.toLowerCase();
+    const domain = senderDomain_(from);
+    
     const skip = shouldSkipMessage(subject, from, body);
     
     if (skip) {
       skippedCount++;
-      if (skippedCount <= 20) {
-        Logger.log(`[SKIP] From: ${from} | Subject: ${subject}`);
+      let reason = "No positive signal keywords found";
+      
+      if (domain === 'jobs-listings.linkedin.com' || domain === 'jobs-listings@linkedin.com') {
+        reason = "Domain is LinkedIn job listings";
+      } else if (lowerSubject.includes('weekly') || lowerSubject.includes('digest') || lowerSubject.includes('job alert') || lowerSubject.includes('security alert')) {
+        reason = "Subject contains newsletter keywords (weekly/digest/alert)";
+      } else {
+        const bodyHasPositive = positiveKeywords.some(keyword => lowerBody.includes(keyword));
+        if (bodyHasPositive) {
+          reason = "Body contains positive keyword but sender/content matched newsletter noise platform patterns";
+        }
       }
+      Logger.log(`[SKIP - ${reason}] From: ${from} | Subject: ${subject}`);
     } else {
       parsedCount++;
-      if (parsedCount <= 20) {
-        const company = CompanyUtils.extractCompany(subject, body, from, firstMsg.getBody());
-        const rawJobTitle = JobUtils.extractJobTitle(subject, body, from, firstMsg.getBody());
-        const jobTitle = JobUtils.cleanJobTitle(rawJobTitle);
-        Logger.log(`[PASS] From: ${from} | Subject: ${subject} => Co: ${company} | Title: ${jobTitle}`);
-      }
+      const company = CompanyUtils.extractCompany(subject, body, from, firstMsg.getBody());
+      const rawJobTitle = JobUtils.extractJobTitle(subject, body, from, firstMsg.getBody());
+      const jobTitle = JobUtils.cleanJobTitle(rawJobTitle);
+      Logger.log(`[PASS] From: ${from} | Subject: ${subject} => Co: ${company} | Title: ${jobTitle}`);
     }
   }
   
