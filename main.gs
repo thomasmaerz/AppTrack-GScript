@@ -936,6 +936,7 @@ function runGeminiBroadGapAudit() {
   // 2. Map thread metadata & extract regex decisions
   const threadLogs = [];
   const promptLogs = []; // Ultra-compressed input schema for Gemini
+  const idxMap = new Map(); // "001" -> threadId
   
   for (let i = 0; i < threads.length; i++) {
     const thread = threads[i];
@@ -944,11 +945,15 @@ function runGeminiBroadGapAudit() {
     const firstMsg = messages[0];
     const subject = firstMsg.getSubject();
     const from = firstMsg.getFrom();
-    const snippet = thread.getSnippet() || '';
+    const body = firstMsg.getPlainBody() || '';
+    const snippet = body.substring(0, 350).replace(/\s+/g, ' ').trim();
     
     // Evaluate Regex classification (PASS vs SKIP) using snippet instead of full body
     const regexSkip = shouldSkipMessage(subject, from, snippet);
     const regexDecision = regexSkip ? 'SKIP' : 'PASS';
+    
+    const idx = String(i + 1).padStart(3, '0');
+    idxMap.set(idx, thread.getId());
     
     threadLogs.push({
       threadId: thread.getId(),
@@ -960,7 +965,7 @@ function runGeminiBroadGapAudit() {
     });
     
     promptLogs.push({
-      id: thread.getId(),
+      idx: idx,
       f: from,
       s: subject,
       sn: snippet
@@ -974,9 +979,20 @@ function runGeminiBroadGapAudit() {
     Logger.log(`Sending batch ${Math.floor(i / GEMINI_CONFIG.batchSize) + 1} to Gemini (${batch.length} threads)...`);
     try {
       const results = GeminiClient.classifyBatch(batch);
-      results.forEach(res => geminiMap.set(res.id, res));
+      results.forEach(res => {
+        const threadId = idxMap.get(res.idx);
+        if (threadId) {
+          geminiMap.set(threadId, res);
+        }
+      });
     } catch (e) {
       Logger.log("Error classifying batch: " + e.toString());
+    }
+    
+    // Pacing delay to stabilize connection and respect limits
+    if (i + GEMINI_CONFIG.batchSize < promptLogs.length) {
+      Logger.log("Applying pacing delay (1000ms) before next batch...");
+      Utilities.sleep(1000);
     }
   }
 
