@@ -687,25 +687,44 @@ function runDiagnosticMailboxAudit() {
   const exclusions = '-from:jobs-listings@linkedin.com -from:@glassdoor.com -subject:"password reset" -subject:"weekly application update" -subject:digest';
   const fullBroadQuery = broadQuery + ' ' + exclusions;
   
-  Logger.log('Starting Diagnostic Mailbox Audit...');
+  Logger.log('Starting Diagnostic Mailbox Audit (Uncapped)...');
   Logger.log('Broad query: ' + fullBroadQuery);
   
-  let threads;
-  try {
-    threads = GmailApp.search(fullBroadQuery, 0, 500);
-  } catch (e) {
-    Logger.log('Failed to execute search: ' + e.toString());
-    SpreadsheetApp.getActive().toast('Diagnostic failed: ' + e.toString());
-    return;
+  let allThreads = [];
+  let page = 0;
+  const pageSize = 500;
+  
+  while (true) {
+    let threadsPage;
+    try {
+      threadsPage = GmailApp.search(fullBroadQuery, page * pageSize, pageSize);
+    } catch (e) {
+      Logger.log(`Failed to execute search at page ${page}: ` + e.toString());
+      break;
+    }
+    
+    if (!threadsPage || threadsPage.length === 0) {
+      break;
+    }
+    
+    allThreads = allThreads.concat(threadsPage);
+    Logger.log(`Fetched page ${page + 1}: found ${threadsPage.length} threads (Cumulative: ${allThreads.length})`);
+    
+    if (threadsPage.length < pageSize) {
+      break; // Last page reached
+    }
+    
+    page++;
+    Utilities.sleep(100); // Avoid rate limiting
   }
   
-  Logger.log('Total threads matching broad query: ' + threads.length);
+  Logger.log('Total threads matching broad query: ' + allThreads.length);
   
   let skippedCount = 0;
   let parsedCount = 0;
   
-  for (let i = 0; i < threads.length; i++) {
-    const thread = threads[i];
+  for (let i = 0; i < allThreads.length; i++) {
+    const thread = allThreads[i];
     const messages = thread.getMessages();
     if (messages.length === 0) continue;
     
@@ -733,9 +752,9 @@ function runDiagnosticMailboxAudit() {
   }
   
   Logger.log(`Diagnostic Complete!`);
-  Logger.log(`Total threads analyzed: ${threads.length}`);
+  Logger.log(`Total threads analyzed: ${allThreads.length}`);
   Logger.log(`Threads matched (parsed): ${parsedCount}`);
   Logger.log(`Threads skipped (noise filter): ${skippedCount}`);
   
-  SpreadsheetApp.getActive().toast(`Diagnostic Complete: Found ${threads.length} total, Parsed ${parsedCount}, Skipped ${skippedCount}`);
+  SpreadsheetApp.getActive().toast(`Diagnostic Complete: Found ${allThreads.length} total, Parsed ${parsedCount}, Skipped ${skippedCount}`);
 }
