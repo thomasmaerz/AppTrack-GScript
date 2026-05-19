@@ -30,6 +30,7 @@ function onOpen() {
     .addItem('Show Debug State', 'logTrackerDebugState')
     .addItem('Compare Gmail Query Counts', 'compareGmailQueryCountsForTargetSpreadsheet')
     .addItem('Run Diagnostic Mailbox Audit', 'runDiagnosticMailboxAudit')
+    .addItem('Run Broad Search Gap Audit', 'runBroadSearchGapAudit')
     .addItem('Run Tracker Tests', 'runTrackerTests')
     .addItem('Set up daily scanning', 'setupTriggers')
     .addItem('Refresh Visualizations', 'refreshVisualizations')
@@ -821,4 +822,85 @@ function runDiagnosticMailboxAudit() {
   Logger.log(`Threads skipped (noise filter): ${skippedCount}`);
   
   SpreadsheetApp.getActive().toast(`Diagnostic Complete: Found ${allThreads.length} total strict matches! Open the "${tabName}" sheet tab to view all entries!`);
+}
+
+
+function runBroadSearchGapAudit() {
+  const runStart = new Date();
+  
+  // Define strict and broad queries over a 90-day window to evaluate the gap
+  const dateWindow = 'after:' + formatScanDate_(daysBefore_(runStart, 90));
+  
+  const signalGroup = '(subject:("thank you for applying" OR "thank you for your application" OR "your application was sent" OR "application submitted" OR "successfully applied" OR "your application to" OR "your application for" OR "application received" OR "we received your application" OR "confirmation of your application" OR "interview invitation" OR "schedule interview" OR assessment OR "coding challenge" OR "job offer" OR "status update" OR "regarding your application") OR body:("thank you for your interest" OR "your application was sent" OR "application submitted" OR "successfully applied" OR "your application to" OR "your application for") OR from:(@talent OR @careers OR @jobs OR @hr OR @recruiting OR @hire OR jobs-noreply@linkedin.com OR candidates.workablemail.com OR @inbound.workablemail.com OR greenhouse.io OR lever.co OR myworkdayjobs.com OR workday.com OR icims.com OR smartrecruiters.com OR indeed.com OR successfactors.com))';
+  const exclusions = '-from:jobs-listings@linkedin.com -from:@glassdoor.com -subject:"password reset" -subject:"weekly application update" -subject:digest';
+  const strictQuery = signalGroup + ' ' + exclusions + ' ' + dateWindow;
+  
+  const broadQuery = '(application OR applied OR interview OR recruiter OR careers OR hiring OR "for applying" OR "application submitted" OR "your application") ' + dateWindow;
+  
+  Logger.log('Starting Broad Search Gap Audit (90-day window)...');
+  Logger.log('Strict query: ' + strictQuery);
+  Logger.log('Broad query: ' + broadQuery);
+  
+  // 1. Fetch strict query thread IDs
+  const strictThreadIds = new Set();
+  let page = 0;
+  const pageSize = 500;
+  while (true) {
+    let threadsPage = GmailApp.search(strictQuery, page * pageSize, pageSize);
+    if (!threadsPage || threadsPage.length === 0) break;
+    threadsPage.forEach(t => strictThreadIds.add(t.getId()));
+    if (threadsPage.length < pageSize) break;
+    page++;
+  }
+  Logger.log(`Found ${strictThreadIds.size} threads matching strict query in past 90 days.`);
+  
+  // 2. Fetch broad query threads
+  const broadThreads = [];
+  page = 0;
+  while (true) {
+    let threadsPage = GmailApp.search(broadQuery, page * pageSize, pageSize);
+    if (!threadsPage || threadsPage.length === 0) break;
+    threadsPage.forEach(t => broadThreads.push(t));
+    if (threadsPage.length < pageSize || broadThreads.length >= 1500) break; // Cap at 1500 to prevent execution limit
+    page++;
+  }
+  Logger.log(`Found ${broadThreads.length} threads matching broad query in past 90 days.`);
+  
+  // 3. Find the gaps
+  const gapData = [["Date", "From", "Subject", "Snippet", "Thread ID"]];
+  let gapCount = 0;
+  
+  for (let i = 0; i < broadThreads.length; i++) {
+    const thread = broadThreads[i];
+    if (strictThreadIds.has(thread.getId())) continue; // Not a gap
+    
+    const messages = thread.getMessages();
+    if (messages.length === 0) continue;
+    const firstMsg = messages[0];
+    
+    gapCount++;
+    gapData.push([
+      firstMsg.getDate().toISOString(),
+      firstMsg.getFrom(),
+      firstMsg.getSubject(),
+      firstMsg.getSnippet(), // Use message.getSnippet() directly
+      thread.getId()
+    ]);
+  }
+  
+  Logger.log(`Found ${gapCount} threads that matched the broad query but NOT the strict query (the Gap).`);
+  
+  // Write to temporary sheet named "Broad Search Gap Audit"
+  const spreadsheet = getOrCreateSpreadsheet();
+  let gapSheet = spreadsheet.getSheetByName("Broad Search Gap Audit");
+  if (gapSheet) {
+    gapSheet.clear();
+  } else {
+    gapSheet = spreadsheet.insertSheet("Broad Search Gap Audit");
+  }
+  
+  gapSheet.getRange(1, 1, gapData.length, gapData[0].length).setValues(gapData);
+  gapSheet.autoResizeColumns(1, gapData[0].length);
+  
+  SpreadsheetApp.getActive().toast(`Gap audit complete! Found ${gapCount} potential missed emails in "Broad Search Gap Audit" tab!`);
 }

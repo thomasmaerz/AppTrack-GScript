@@ -154,7 +154,7 @@ function shouldSkipMessage(subject, from, body) {
     return false;
   }
 
-  // C. Passcode/Verification/Account Registration Absolute Exclusions
+  // C. Passcode/Verification/Account Registration/Marketing Absolute Exclusions
   if (lowerSubject.includes('security code') ||
       lowerSubject.includes('verification code') ||
       lowerSubject.includes('one-time') ||
@@ -167,7 +167,12 @@ function shouldSkipMessage(subject, from, body) {
       lowerSubject.includes('candidate account') ||
       lowerSubject.includes('complete your candidate profile') ||
       lowerSubject.includes('one-time-passcode') ||
-      lowerSubject.includes('discover the next steps for your')) {
+      lowerSubject.includes('discover the next steps for your') ||
+      lowerSubject.includes('is a match') ||
+      lowerSubject.includes('job is a match') ||
+      lowerSubject.includes('creating your account') ||
+      lowerSubject.includes('thanks for creating') ||
+      lowerSubject.includes('talent community')) {
     return true;
   }
 
