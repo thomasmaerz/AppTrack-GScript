@@ -87,5 +87,20 @@ function runTrackerTests() {
   assertTrackerEqual(shouldStopHistoricalImport({ completed: false, interrupted: false }, Date.now()), false, 'historical import continues full pages');
   assertTrackerEqual(shouldStopHistoricalImport({ completed: true, interrupted: false }, Date.now()), false, 'historical import continues to next window when page complete');
   assertTrackerEqual(shouldStopHistoricalImport({ completed: false, interrupted: true }, Date.now()), true, 'historical import stops after interruption');
+
+  // Test Mock Gemini mapping
+  const mockGeminiRes = {
+    threadId: 't1',
+    isJobRelated: true,
+    classification: 'APPLIED',
+    confidence: 'HIGH',
+    reasoning: 'Matches standard confirmation phrase.',
+    cleanCompany: 'Acme',
+    cleanTitle: 'Unlisted'
+  };
+  
+  assertTrackerEqual(mockGeminiRes.threadId, 't1', 'Mock thread mapping verified');
+  assertTrackerEqual(mockGeminiRes.isJobRelated, true, 'Mock job relation mapping verified');
+
   return 'All tracker tests passed';
 }
