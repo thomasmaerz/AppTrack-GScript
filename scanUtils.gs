@@ -49,7 +49,7 @@ function getHigherPriorityStatus(currentStatus, candidateStatus) {
 }
 
 function buildGmailSearchQuery(mode, window) {
-  const signalGroup = '(subject:("thank you for applying" OR "thank you for your application" OR "your application was sent" OR "application submitted" OR "successfully applied" OR "your application to" OR "your application for" OR "application received" OR "we received your application" OR "confirmation of your application" OR "interview invitation" OR "schedule interview" OR assessment OR "coding challenge" OR "job offer" OR "status update" OR "regarding your application") OR body:("thank you for your interest" OR "your application was sent" OR "application submitted" OR "successfully applied" OR "your application to" OR "your application for") OR from:(@talent OR @careers OR @jobs OR @hr OR @recruiting OR @hire OR jobs-noreply@linkedin.com OR candidates.workablemail.com OR @inbound.workablemail.com OR greenhouse.io OR lever.co OR myworkdayjobs.com OR workday.com OR icims.com OR smartrecruiters.com OR indeed.com OR successfactors.com))';
+  const signalGroup = '(subject:("thank you for applying" OR "thank you for your application" OR "your application was sent" OR "application submitted" OR "successfully applied" OR "your application to" OR "your application for" OR "application received" OR "we received your application" OR "confirmation of your application" OR "interview invitation" OR "schedule interview" OR assessment OR "coding challenge" OR "job offer" OR "status update" OR "regarding your application" OR "thank you for your interest" OR "thank you in your interest" OR "update on your candidacy") OR body:("thank you for your interest" OR "your application was sent" OR "application submitted" OR "successfully applied" OR "your application to" OR "your application for") OR from:(@talent OR @careers OR @jobs OR @hr OR @recruiting OR @hire OR jobs-noreply@linkedin.com OR candidates.workablemail.com OR @inbound.workablemail.com OR greenhouse.io OR greenhouse-mail.io OR lever.co OR myworkdayjobs.com OR myworkday.com OR workday.com OR icims.com OR smartrecruiters.com OR indeed.com OR successfactors.com))';
   const exclusions = '-from:jobs-listings@linkedin.com -from:@glassdoor.com -subject:"password reset" -subject:"weekly application update" -subject:digest';
   return signalGroup + ' ' + exclusions + ' ' + buildDateWindowFilter(window);
 }
@@ -59,7 +59,7 @@ function buildBroadGmailSearchQuery(window) {
 }
 
 function buildAtsGmailSearchQuery(window) {
-  return 'from:(greenhouse.io OR lever.co OR workday.com OR myworkdayjobs.com OR icims.com OR smartrecruiters.com OR workablemail.com OR successfactors.com OR ashbyhq.com OR recruitee.com OR breezy.hr OR jazzhr.com OR bamboohr.com OR workable.com OR jobvite.com OR oracle.com OR ukg.com OR paycor.com OR paylocity.com OR adp.com OR rippling.com OR darwinbox.com OR phenom.com OR avature.net) ' + buildDateWindowFilter(window);
+  return 'from:(greenhouse.io OR greenhouse-mail.io OR lever.co OR workday.com OR myworkdayjobs.com OR myworkday.com OR icims.com OR smartrecruiters.com OR workablemail.com OR successfactors.com OR ashbyhq.com OR recruitee.com OR breezy.hr OR jazzhr.com OR bamboohr.com OR workable.com OR jobvite.com OR oracle.com OR ukg.com OR paycor.com OR paylocity.com OR adp.com OR rippling.com OR darwinbox.com OR phenom.com OR avature.net) ' + buildDateWindowFilter(window);
 }
 
 function isHighConfidenceSubject_(lowerSubject) {
@@ -126,14 +126,14 @@ function shouldSkipMessage(subject, from, body) {
 
   // Unified list of trusted recruitment/ATS domains
   const recruitmentDomains = [
-    'greenhouse.io', 'lever.co', 'myworkdayjobs.com', 'workday.com', 'myworkday.com', 'workdayjobs.com',
+    'greenhouse.io', 'greenhouse-mail.io', 'lever.co', 'myworkdayjobs.com', 'workday.com', 'myworkday.com', 'workdayjobs.com',
     'icims.com', 'smartrecruiters.com', 'successfactors.com', 'workablemail.com',
     'ashbyhq.com', 'recruitee.com', 'breezy.hr', 'jazzhr.com', 'bamboohr.com',
     'workable.com', 'jobvite.com', 'oracle.com', 'ukg.com', 'paycor.com',
     'paylocity.com', 'adp.com', 'rippling.com', 'darwinbox.com', 'phenom.com',
     'avature.net', 'randstad.ca', 'randstad.com', 'procom.ca', 'procomservices.com',
     'roberthalf.com', 'roberthalf.ca', 'hays.ca', 'hays.com', 'teema.com',
-    'agilus.ca', 'insight.com', 'appointz.com'
+    'agilus.ca', 'insight.com', 'appointz.com', 'servus.ca', 'atco.com'
   ];
 
   const isRecruitmentDomain = recruitmentDomains.some(d => domain === d || domain.endsWith('.' + d));
@@ -149,7 +149,9 @@ function shouldSkipMessage(subject, from, body) {
       lowerSubject.includes('your application') || 
       lowerSubject.includes('thank you for your interest') ||
       lowerSubject.includes('thank you for applying') ||
-      lowerSubject.includes('thanks for applying')
+      lowerSubject.includes('thanks for applying') ||
+      lowerSubject.includes('thank you in your interest') ||
+      lowerSubject.includes('update on your candidacy')
   )) {
     return false;
   }
