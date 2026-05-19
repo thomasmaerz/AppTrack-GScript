@@ -122,32 +122,94 @@ function shouldSkipMessage(subject, from, body) {
   const lowerSubject = String(subject || '').toLowerCase();
   const lowerBody = String(body || '').toLowerCase();
   const domain = senderDomain_(from);
-  
-  // 1. High-confidence subject check (never skip real confirmation subjects)
+  const fromLower = String(from || '').toLowerCase();
+
+  // A. Indeed Apply Direct Confirmation Rescue
+  if (domain === 'indeedapply.indeed.com' || fromLower.includes('indeedapply@indeed.com') || lowerSubject.startsWith('indeed application:')) {
+    return false;
+  }
+
+  // B. Workday & Greenhouse Transactional Subject Rescue
+  const isAtsDomain = /(^|\.)(greenhouse\.io|lever\.co|myworkdayjobs\.com|workday\.com|icims\.com|smartrecruiters\.com|successfactors\.com|workablemail\.com|ashbyhq\.com|recruitee\.com|breezy\.hr|jazzhr\.com|bamboohr\.com|workable\.com|jobvite\.com|oracle\.com|ukg\.com|paycor\.com|paylocity\.com|adp\.com|rippling\.com|darwinbox\.com|phenom\.com|avature\.net)$/i.test(domain);
+  if (isAtsDomain && (lowerSubject === 'regarding your application' || lowerSubject === 'your application' || lowerSubject === 'thank you for your interest')) {
+    return false;
+  }
+
+  // C. Passcode/Verification/Account Registration Absolute Exclusions
+  if (lowerSubject.includes('security code') ||
+      lowerSubject.includes('verification code') ||
+      lowerSubject.includes('one-time') ||
+      lowerSubject.includes('verify your') ||
+      lowerSubject.includes('password reset') ||
+      lowerSubject.includes('reset your password') ||
+      lowerSubject.includes('account created') ||
+      lowerSubject.includes('registering with') ||
+      lowerSubject.includes('welcome to') ||
+      lowerSubject.includes('candidate account') ||
+      lowerSubject.includes('complete your candidate profile') ||
+      lowerSubject.includes('one-time-passcode') ||
+      lowerSubject.includes('discover the next steps for your')) {
+    return true;
+  }
+
+  // D. General Marketing & Non-Job Exclusions
+  if (domain.includes('zillow.com') || domain.includes('mst.edu')) {
+    return true;
+  }
+
+  // E. LinkedIn Alert & Suggestion Absolute Exclusions
+  if (domain === 'jobs-listings.linkedin.com' || domain === 'jobs-listings@linkedin.com' || fromLower.includes('jobs-noreply@linkedin.com')) {
+    if (lowerSubject.includes('apply now to') ||
+        lowerSubject.includes('apply to') ||
+        lowerSubject.includes('looking for a new job') ||
+        lowerSubject.includes('new application updates') ||
+        lowerSubject.includes('jobs similar to') ||
+        lowerSubject.includes('similar to') ||
+        lowerSubject.includes('expiring on') ||
+        lowerSubject.includes('viewed by') ||
+        lowerSubject.includes('updates this week') ||
+        lowerSubject.includes('weekly application update') ||
+        lowerSubject.includes('jobs you may be')) {
+      return true;
+    }
+  }
+
+  // F. Indeed Alert & Match Absolute Exclusions
+  if (domain.includes('indeed.com') || fromLower.includes('indeed')) {
+    if (domain === 'match.indeed.com' ||
+        fromLower.includes('@match.indeed.com') ||
+        lowerSubject.includes('+') ||
+        lowerSubject.includes('jobs in') ||
+        lowerSubject.includes('job alert') ||
+        lowerSubject.includes('new job') ||
+        lowerSubject.includes('opportunity in') ||
+        lowerSubject.includes('is hiring for') ||
+        lowerSubject.includes('jobs for you') ||
+        lowerSubject.includes('opportunities in') ||
+        lowerSubject.includes('jobs similar to') ||
+        lowerSubject.includes('more new jobs')) {
+      return true;
+    }
+  }
+
+  // G. Mastercard Talent Network Newsletter Exclusions
+  if (domain.includes('mastercard.com') || fromLower.includes('mastercard')) {
+    if (!lowerSubject.includes('your application') && !lowerSubject.includes('thank you') && !lowerSubject.includes('interview')) {
+      return true;
+    }
+  }
+
+  // H. High-confidence subject check
   if (isHighConfidenceSubject_(lowerSubject)) {
     return false; // Keep it immediately!
   }
-  
-  // 2. High-confidence subject noise skips
-  if (domain === 'jobs-listings.linkedin.com' || domain === 'jobs-listings@linkedin.com') return true;
-  if (lowerSubject.includes('weekly application update') || 
-      lowerSubject.includes('jobs you may be interested in') ||
-      lowerSubject.includes('job alert') ||
-      lowerSubject.includes('weekly') ||
-      lowerSubject.includes('digest') ||
-      lowerSubject.includes('password reset') ||
-      lowerSubject.includes('security alert') ||
-      (lowerSubject.includes('calendar notification') && !lowerSubject.includes('interview'))) {
-    return true; // Skip clear subject noise
-  }
-  
-  // 3. Trusted ATS domains are automatically kept (unless subject was noise above)
-  const isAtsDomain = /(^|\.)(greenhouse\.io|lever\.co|myworkdayjobs\.com|workday\.com|icims\.com|smartrecruiters\.com|successfactors\.com|workablemail\.com|ashbyhq\.com|recruitee\.com|breezy\.hr|jazzhr\.com|bamboohr\.com|workable\.com|jobvite\.com|oracle\.com|ukg\.com|paycor\.com|paylocity\.com|adp\.com|rippling\.com|darwinbox\.com|phenom\.com|avature\.net)$/i.test(domain);
+
+  // I. Trusted ATS domains are automatically kept
   if (isAtsDomain) {
     return false; 
   }
-  
-  // 4. Check body positive keywords with robust noise exclusion
+
+  // J. Body positive keywords check
   const positiveKeywords = [
     'your application was sent',
     'application submitted',
@@ -168,16 +230,13 @@ function shouldSkipMessage(subject, from, body) {
     'congratulations',
     'offer letter'
   ];
-  
+
   const bodyHasPositive = positiveKeywords.some(keyword => lowerBody.includes(keyword));
   if (bodyHasPositive) {
     const bodyHasNoise = (
-      // Platform domains
       domain.includes('substack') || 
       domain.includes('beehiiv') || 
       domain.includes('medium.com') ||
-      
-      // Keywords
       lowerSubject.includes('newsletter') ||
       lowerSubject.includes('digest') ||
       lowerSubject.includes('security alert') ||
@@ -190,11 +249,9 @@ function shouldSkipMessage(subject, from, body) {
     );
                          
     if (!bodyHasNoise) {
-      return false; // Keep valid body confirmation without general newsletter patterns
+      return false;
     }
   }
-  
-  // 5. Default: skip to prevent newsletter leakage
+
   return true;
 }
-function shouldSkipThread(thread) { const messages = thread.getMessages(); const message = messages[0]; return shouldSkipMessage(message.getSubject(), message.getFrom(), message.getPlainBody()); }
