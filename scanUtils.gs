@@ -59,7 +59,7 @@ function buildBroadGmailSearchQuery(window) {
 }
 
 function buildAtsGmailSearchQuery(window) {
-  return 'from:(linkedin.com OR indeed.com OR greenhouse.io OR lever.co OR workday.com OR myworkdayjobs.com OR icims.com OR smartrecruiters.com OR workablemail.com OR successfactors.com) ' + buildDateWindowFilter(window);
+  return 'from:(greenhouse.io OR lever.co OR workday.com OR myworkdayjobs.com OR icims.com OR smartrecruiters.com OR workablemail.com OR successfactors.com) ' + buildDateWindowFilter(window);
 }
 
 function isPositiveApplicationSignal_(haystack, domain) {
@@ -82,8 +82,8 @@ function isPositiveApplicationSignal_(haystack, domain) {
   if (haystack.includes('congratulations')) return true;
   if (haystack.includes('offer letter')) return true;
   
-  // Match standard job ATS/candidate platform domains
-  return /(^|\.)(greenhouse\.io|lever\.co|myworkdayjobs\.com|workday\.com|icims\.com|smartrecruiters\.com|indeed\.com|successfactors\.com|workablemail\.com|linkedin\.com)$/.test(domain);
+  // Match standard job ATS/candidate platform domains (excluding raw linkedin.com/indeed.com to prevent general updates from passing)
+  return /(^|\.)(greenhouse\.io|lever\.co|myworkdayjobs\.com|workday\.com|icims\.com|smartrecruiters\.com|successfactors\.com|workablemail\.com)$/.test(domain);
 }
 
 function shouldStopHistoricalImport(result, importStartTime) {
