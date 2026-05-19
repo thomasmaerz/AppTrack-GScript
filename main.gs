@@ -275,7 +275,6 @@ function scanEmails(mode, spreadsheetId) {
 
   // Create maps to store existing data for lookup
   const existingThreadIds = new Map(); // threadId -> row number
-  const existingJobApplications = new Map(); // "jobtitle|company" -> row number
   
   // Reload the data after potentially adding the ThreadId column
   const updatedData = sheet.getDataRange().getValues();
@@ -285,12 +284,6 @@ function scanEmails(mode, spreadsheetId) {
     // Store threadId -> row number mapping if ThreadId column exists
     if (threadIdIndex < row.length && row[threadIdIndex]) { 
       existingThreadIds.set(row[threadIdIndex], i + 1); // Store thread ID and row number (1-indexed)
-    }
-    
-    // Store "jobtitle|company" -> row number mapping
-    if (row[jobTitleIndex] && row[companyIndex]) {
-      const key = (row[jobTitleIndex] + '|' + row[companyIndex]).toLowerCase();
-      existingJobApplications.set(key, i + 1);
     }
   }
   
@@ -392,13 +385,9 @@ function scanEmails(mode, spreadsheetId) {
       }
     }
 
-    // Create lookup key for checking if this is a duplicate application
-    const lookupKey = (jobTitle + '|' + company).toLowerCase();
-    
-    // Check if we already have an entry for this job title and company combination
-    if (existingJobApplications.has(lookupKey)) {
-      // This is a duplicate - update the existing entry
-      const existingRowNum = existingJobApplications.get(lookupKey);
+    // Check if we already have an entry for this thread ID
+    if (existingThreadIds.has(threadId)) {
+      const existingRowNum = existingThreadIds.get(threadId);
       
       // Get the current status from the sheet
       const currentStatus = sheet.getRange(existingRowNum, statusIndex + 1).getValue();
@@ -410,7 +399,7 @@ function scanEmails(mode, spreadsheetId) {
       
       updatedApplicationsCount++;
     } else {
-      // This is a new application - add a new row
+      // This is a new application thread - add a new row
       const rowData = new Array(sheet.getLastColumn()).fill('');
       rowData[jobTitleIndex] = jobTitle;
       rowData[companyIndex] = company;
@@ -423,9 +412,8 @@ function scanEmails(mode, spreadsheetId) {
       newRows.push(rowData);
       newRowLinks.push({ row: newRow, threadLink: threadLink, submittedDate: date, updatedDate: lastDate });
       
-      // Add this to our maps so we can detect duplicates in the same batch
+      // Add this to our map so we can detect duplicates in the same batch
       existingThreadIds.set(threadId, newRow);
-      existingJobApplications.set(lookupKey, newRow);
       
       newApplicationsCount++;
     }
