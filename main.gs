@@ -23,6 +23,10 @@ function onOpen() {
   ui.createMenu('Job Tracker')
     .addItem('Scan Emails', 'scanEmails')
     .addItem('Import Historical Emails', 'importHistoricalEmails')
+    .addSeparator()
+    .addItem('Reset Historical Scan State', 'resetHistoricalScanState')
+    .addItem('Reset All Tracker State', 'resetAllTrackerState')
+    .addSeparator()
     .addItem('Show Debug State', 'logTrackerDebugState')
     .addItem('Compare Gmail Query Counts', 'compareGmailQueryCountsForTargetSpreadsheet')
     .addItem('Run Tracker Tests', 'runTrackerTests')
@@ -663,4 +667,16 @@ function scanForNewApplications() {
  */
 function scanForStatusUpdates() {
   scanEmails();
+}
+
+function resetHistoricalScanState() {
+  clearHistoricalScanState();
+  SpreadsheetApp.getActive().toast('Historical scan state has been reset! Backfill will start cleanly from today.');
+  Logger.log('Historical scan state has been explicitly reset by the user.');
+}
+
+function resetAllTrackerState() {
+  clearAllTrackerState();
+  SpreadsheetApp.getActive().toast('All tracker scan state has been reset! Scanning will re-import all historical and recent emails.');
+  Logger.log('All tracker scan state has been explicitly reset by the user.');
 }
