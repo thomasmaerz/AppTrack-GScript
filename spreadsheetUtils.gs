@@ -644,12 +644,12 @@ const SpreadsheetUtils = {
   createRecentActivitySection: function(sheet, mainSheet, startRow) {
     // Create section header
     const headerRange = sheet.getRange(startRow, 1, 1, 4);
-    headerRange.setValues([["Recent Application Activity"]]);
+    headerRange.merge();
+    headerRange.setValue("Recent Application Activity");
     headerRange.setFontWeight("bold");
     headerRange.setFontSize(14);
     headerRange.setBackground("#3f51b5"); // Indigo
     headerRange.setFontColor("#ffffff"); // White
-    headerRange.merge();
     
     // Get data from main sheet
     const lastRow = mainSheet.getLastRow();
