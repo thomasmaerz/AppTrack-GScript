@@ -59,31 +59,44 @@ function buildBroadGmailSearchQuery(window) {
 }
 
 function buildAtsGmailSearchQuery(window) {
-  return 'from:(greenhouse.io OR lever.co OR workday.com OR myworkdayjobs.com OR icims.com OR smartrecruiters.com OR workablemail.com OR successfactors.com) ' + buildDateWindowFilter(window);
+  return 'from:(greenhouse.io OR lever.co OR workday.com OR myworkdayjobs.com OR icims.com OR smartrecruiters.com OR workablemail.com OR successfactors.com OR ashbyhq.com OR recruitee.com OR breezy.hr OR jazzhr.com OR bamboohr.com OR workable.com OR jobvite.com OR oracle.com OR ukg.com OR paycor.com OR paylocity.com OR adp.com OR rippling.com OR darwinbox.com OR phenom.com OR avature.net) ' + buildDateWindowFilter(window);
 }
 
-function isPositiveApplicationSignal_(haystack, domain) {
-  if (haystack.includes('your application was sent')) return true;
-  if (haystack.includes('application submitted')) return true;
-  if (haystack.includes('successfully applied')) return true;
-  if (haystack.includes('application received')) return true;
-  if (haystack.includes('we received your application')) return true;
-  if (haystack.includes('thank you for applying')) return true;
-  if (haystack.includes('thank you for your application')) return true;
-  if (haystack.includes('thank you for your interest')) return true;
-  if (haystack.includes('thank you for taking the time to apply')) return true;
-  if (haystack.includes('interview')) return true;
-  if (haystack.includes('assessment')) return true;
-  if (haystack.includes('coding challenge')) return true;
-  if (haystack.includes('not moving forward')) return true;
-  if (haystack.includes('regret to inform')) return true;
-  if (haystack.includes('other candidates')) return true;
-  if (haystack.includes('unable to offer')) return true;
-  if (haystack.includes('congratulations')) return true;
-  if (haystack.includes('offer letter')) return true;
+function isHighConfidenceSubject_(lowerSubject) {
+  const hasAppPattern = lowerSubject.includes('application') || 
+                        lowerSubject.includes('applied') || 
+                        lowerSubject.includes('applying');
+                        
+  if (hasAppPattern) {
+    const hasConnector = lowerSubject.includes('received') ||
+                         lowerSubject.includes('submitted') ||
+                         lowerSubject.includes('sent') ||
+                         lowerSubject.includes('confirm') ||
+                         lowerSubject.includes('thanks') ||
+                         lowerSubject.includes('thank you') ||
+                         lowerSubject.includes('interest') ||
+                         lowerSubject.includes('status') ||
+                         lowerSubject.includes('update') ||
+                         lowerSubject.includes('at ') ||
+                         lowerSubject.includes('to ') ||
+                         lowerSubject.includes('for ') ||
+                         lowerSubject.includes('with ');
+    if (hasConnector) return true;
+  }
   
-  // Match standard job ATS/candidate platform domains (excluding raw linkedin.com/indeed.com to prevent general updates from passing)
-  return /(^|\.)(greenhouse\.io|lever\.co|myworkdayjobs\.com|workday\.com|icims\.com|smartrecruiters\.com|successfactors\.com|workablemail\.com)$/.test(domain);
+  // Specific absolute keywords
+  const absoluteKeywords = [
+    'interview',
+    'schedule a time',
+    'coding challenge',
+    'assessment',
+    'regret to inform',
+    'not moving forward',
+    'congratulations',
+    'offer letter'
+  ];
+  
+  return absoluteKeywords.some(keyword => lowerSubject.includes(keyword));
 }
 
 function shouldStopHistoricalImport(result, importStartTime) {
@@ -110,31 +123,8 @@ function shouldSkipMessage(subject, from, body) {
   const lowerBody = String(body || '').toLowerCase();
   const domain = senderDomain_(from);
   
-  // 1. High-confidence positive keywords in the subject
-  const positiveKeywords = [
-    'your application was sent',
-    'application submitted',
-    'successfully applied',
-    'application received',
-    'we received your application',
-    'thank you for applying',
-    'thank you for your application',
-    'thank you for your interest',
-    'thank you for taking the time to apply',
-    'interview invitation',
-    'schedule interview',
-    'assessment',
-    'coding challenge',
-    'not moving forward',
-    'regret to inform',
-    'other candidates',
-    'unable to offer',
-    'congratulations',
-    'offer letter'
-  ];
-  
-  const subjectHasPositive = positiveKeywords.some(keyword => lowerSubject.includes(keyword));
-  if (subjectHasPositive) {
+  // 1. High-confidence subject check (never skip real confirmation subjects)
+  if (isHighConfidenceSubject_(lowerSubject)) {
     return false; // Keep it immediately!
   }
   
@@ -152,12 +142,33 @@ function shouldSkipMessage(subject, from, body) {
   }
   
   // 3. Trusted ATS domains are automatically kept (unless subject was noise above)
-  const isAtsDomain = /(^|\.)(greenhouse\.io|lever\.co|myworkdayjobs\.com|workday\.com|icims\.com|smartrecruiters\.com|successfactors\.com|workablemail\.com)$/.test(domain);
+  const isAtsDomain = /(^|\.)(greenhouse\.io|lever\.co|myworkdayjobs\.com|workday\.com|icims\.com|smartrecruiters\.com|successfactors\.com|workablemail\.com|ashbyhq\.com|recruitee\.com|breezy\.hr|jazzhr\.com|bamboohr\.com|workable\.com|jobvite\.com|oracle\.com|ukg\.com|paycor\.com|paylocity\.com|adp\.com|rippling\.com|darwinbox\.com|phenom\.com|avature\.net)$/i.test(domain);
   if (isAtsDomain) {
     return false; 
   }
   
   // 4. Check body positive keywords with robust noise exclusion
+  const positiveKeywords = [
+    'your application was sent',
+    'application submitted',
+    'successfully applied',
+    'application received',
+    'we received your application',
+    'thank you for applying',
+    'thank you for your application',
+    'thank you for your interest',
+    'thanks for applying',
+    'thanks for your application',
+    'thanks for your interest',
+    'interview',
+    'assessment',
+    'coding challenge',
+    'not moving forward',
+    'regret to inform',
+    'congratulations',
+    'offer letter'
+  ];
+  
   const bodyHasPositive = positiveKeywords.some(keyword => lowerBody.includes(keyword));
   if (bodyHasPositive) {
     const bodyHasNoise = (lowerBody.includes('weekly application update') || 
@@ -166,11 +177,7 @@ function shouldSkipMessage(subject, from, body) {
                           lowerBody.includes('password reset')) &&
                          !lowerBody.includes('your application was sent') &&
                          !lowerBody.includes('thank you for applying') &&
-                         !lowerBody.includes('thank you for your application') &&
-                         !lowerBody.includes('application received') &&
-                         !lowerBody.includes('we received your application') &&
-                         !lowerBody.includes('application submitted') &&
-                         !lowerBody.includes('successfully applied') &&
+                         !lowerBody.includes('thanks for applying') &&
                          !lowerBody.includes('interview');
                          
     if (!bodyHasNoise) {
