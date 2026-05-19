@@ -2,13 +2,14 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Resolve mailbox backlog backfill limitations, stop merging distinct job applications (relying strictly on Thread ID), bind dynamic spreadsheet access to the active sheet, overhaul the search query exclusions to avoid false negatives in "promotions", and add a diagnostic mailbox audit tool.
+**Goal:** Resolve mailbox backlog backfill limitations, stop merging distinct job applications (relying strictly on Thread ID), bind dynamic spreadsheet access to the active sheet, overhaul the search query exclusions to avoid false negatives in "promotions", page through all mailbox matches, and implement an opt-in noise filter to exclude newsletters.
 
 **Architecture:** 
 - Dynamically access the active spreadsheet containing the script project by default.
 - Refactor the duplicate matching map to use unique Gmail Thread IDs instead of the cleaned `jobTitle|company` string.
 - Remove `-category:promotions` and `-label:social` from Gmail search exclusions.
-- Implement an explicit mailbox diagnostic audit script to count broad matches, identify skipped emails, and detect false negatives.
+- Implement an explicit mailbox diagnostic audit script that pages through all matching threads.
+- Refactor noise filtering to use an opt-in model that skips generic emails unless a high-confidence positive keyword or ATS domain matches.
 
 **Tech Stack:** Google Apps Script (V8 Engine), Clasp CLI.
 
@@ -19,105 +20,8 @@
 **Files:**
 - Modify: `/Users/tmaerz/projects/AppTrack-GScript/main.gs`
 
-- [ ] **Step 1: Check existing `getOrCreateSpreadsheet` and configurations**
-Inspect the top of `main.gs` to ensure we modify the SPREADSHEET_NAME and spreadsheet fetch fallback. We will remove the hardcoded sheet ID dependence unless explicitly passed.
-
-- [ ] **Step 2: Modify `getOrCreateSpreadsheet`**
-Rewrite the spreadsheet retrieval logic to use the active bound spreadsheet by default.
-
-Replace lines 58-109 in `/Users/tmaerz/projects/AppTrack-GScript/main.gs` with:
-```javascript
-function getOrCreateSpreadsheet(spreadsheetId) {
-  let spreadsheet;
-
-  if (spreadsheetId) {
-    try {
-      spreadsheet = SpreadsheetApp.openById(spreadsheetId);
-    } catch (e) {
-      Logger.log("Failed to open spreadsheet by ID: " + e.toString());
-    }
-  }
-
-  if (!spreadsheet) {
-    try {
-      spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-    } catch (e) {
-      spreadsheet = null;
-    }
-  }
-
-  if (!spreadsheet) {
-    const files = DriveApp.getFilesByName(SPREADSHEET_NAME);
-    if (files.hasNext()) {
-      const file = files.next();
-      spreadsheet = SpreadsheetApp.open(file);
-    } else {
-      spreadsheet = SpreadsheetApp.create(SPREADSHEET_NAME);
-    }
-  }
-  
-  const sheet = spreadsheet.getSheetByName("Applications");
-
-  if (!sheet) {
-    const newSheet = spreadsheet.insertSheet("Applications");
-    SpreadsheetUtils.setupSheet(newSheet);
-    return spreadsheet;
-  }
-
-  const firstCell = sheet.getRange(1, 1).getValue();
-
-  if (firstCell !== "Job Title") {
-    SpreadsheetUtils.setupSheet(sheet);
-  }
-
-  return spreadsheet;
-}
-```
-
-- [ ] **Step 3: Modify hardcoded sheet ID usages in helper entry points**
-In `main.gs`, replace references to `TARGET_SPREADSHEET_ID` with `null` so they default to the active spreadsheet.
-
-In `main.gs`, update configuration variables:
-```javascript
-// Configuration
-const SPREADSHEET_NAME = "Application Tracker";
-const DEBUG_SPREADSHEET_ID = "1FnCwtwAxCEp9mK-aNtaJnM-iAXbCsGzNIOOK3f7nEr4";
-```
-And replace functions:
-```javascript
-function refreshVisualizations() {
-  const spreadsheet = getOrCreateSpreadsheet();
-  const sheet = spreadsheet.getSheetByName("Applications");
-
-  SpreadsheetUtils.enhanceSpreadsheetFormatting(sheet);
-  
-  try {
-    SpreadsheetUtils.createSummaryDashboard(sheet);
-    SpreadsheetApp.getActive().toast('Visualizations refreshed successfully!');
-  } catch (e) {
-    Logger.log("Error refreshing visualizations: " + e.toString());
-    SpreadsheetApp.getActive().toast('Error refreshing visualizations: ' + e.toString());
-  }
-}
-
-function migrateSpreadsheet() {
-  const spreadsheet = getOrCreateSpreadsheet();
-  const sheet = spreadsheet.getSheetByName("Applications");
-  ...
-}
-
-function createRejectionFollowupDrafts() {
-  const spreadsheet = getOrCreateSpreadsheet();
-  const sheet = spreadsheet.getSheetByName("Applications");
-  ...
-}
-```
-
-- [ ] **Step 4: Commit changes**
-```bash
-git add main.gs
-git commit -m "refactor: use dynamic active spreadsheet binding by default"
-```
+- [ ] **Step 1: Verify the dynamic spreadsheet binding**
+Ensure `getOrCreateSpreadsheet` and the spreadsheet helper constants in `main.gs` are updated to dynamically bind to the active spreadsheet. (Completed)
 
 ---
 
@@ -126,70 +30,8 @@ git commit -m "refactor: use dynamic active spreadsheet binding by default"
 **Files:**
 - Modify: `/Users/tmaerz/projects/AppTrack-GScript/main.gs`
 
-- [ ] **Step 1: Refactor scanEmails scanning duplicates logic**
-In `main.gs`, completely remove the `existingJobApplications` map. Rely solely on the unique `existingThreadIds` map to match existing threads. Any thread ID that is not tracked yet will get a brand new row appended, even if the job title and company are duplicates.
-
-Replace lines 283-302 in `/Users/tmaerz/projects/AppTrack-GScript/main.gs`:
-```javascript
-  // Create maps to store existing data for lookup
-  const existingThreadIds = new Map(); // threadId -> row number
-  
-  // Reload the data after potentially adding the ThreadId column
-  const updatedData = sheet.getDataRange().getValues();
-  
-  for (let i = 1; i < updatedData.length; i++) {
-    const row = updatedData[i];
-    // Store threadId -> row number mapping if ThreadId column exists
-    if (threadIdIndex < row.length && row[threadIdIndex]) { 
-      existingThreadIds.set(row[threadIdIndex], i + 1); // Store thread ID and row number (1-indexed)
-    }
-  }
-```
-
-- [ ] **Step 2: Refactor deduplication branch inside email loop**
-Remove the check for `existingJobApplications.has(lookupKey)` so that we only look at `existingThreadIds.has(threadId)`. If the Thread ID is not present, always create a new row.
-
-Replace lines 402-438 in `/Users/tmaerz/projects/AppTrack-GScript/main.gs`:
-```javascript
-    // Check if we already have an entry for this thread ID
-    if (existingThreadIds.has(threadId)) {
-      const existingRowNum = existingThreadIds.get(threadId);
-      
-      // Get the current status from the sheet
-      const currentStatus = sheet.getRange(existingRowNum, statusIndex + 1).getValue();
-      
-      const nextStatus = getHigherPriorityStatus(currentStatus, initialStatus);
-      const shouldUpdateStatus = nextStatus !== currentStatus;
-      
-      pendingCellUpdates.push({ row: existingRowNum, threadId: threadId, status: shouldUpdateStatus ? nextStatus : null, updatedDate: lastDate, threadLink: threadLink });
-      
-      updatedApplicationsCount++;
-    } else {
-      // This is a new application thread - add a new row
-      const rowData = new Array(sheet.getLastColumn()).fill('');
-      rowData[jobTitleIndex] = jobTitle;
-      rowData[companyIndex] = company;
-      rowData[dateSubmittedIndex] = date;
-      rowData[dateUpdatedIndex] = lastDate;
-      rowData[statusIndex] = initialStatus;
-      rowData[headers.indexOf('Raw Body')] = body.slice(0, 100);
-      rowData[threadIdIndex] = threadId;
-      const newRow = sheet.getLastRow() + newRows.length + 1;
-      newRows.push(rowData);
-      newRowLinks.push({ row: newRow, threadLink: threadLink, submittedDate: date, updatedDate: lastDate });
-      
-      // Add this to our map so we can detect duplicates in the same batch
-      existingThreadIds.set(threadId, newRow);
-      
-      newApplicationsCount++;
-    }
-```
-
-- [ ] **Step 3: Commit changes**
-```bash
-git add main.gs
-git commit -m "feat: use strict thread-ID only deduplication to prevent job merging"
-```
+- [ ] **Step 1: Verify thread-ID deduplication logic**
+Confirm that duplicate checking uses `existingThreadIds` and appends all unique threads to new rows. (Completed)
 
 ---
 
@@ -199,138 +41,132 @@ git commit -m "feat: use strict thread-ID only deduplication to prevent job merg
 - Modify: `/Users/tmaerz/projects/AppTrack-GScript/main.gs`
 - Modify: `/Users/tmaerz/projects/AppTrack-GScript/scanUtils.gs`
 
-- [ ] **Step 1: Add new menu items in `onOpen()`**
-Expose resetting state directly in the menu.
-
-In `main.gs`, replace `onOpen()` with:
-```javascript
-function onOpen() {
-  const ui = SpreadsheetApp.getUi();
-  ui.createMenu('Job Tracker')
-    .addItem('Scan Emails', 'scanEmails')
-    .addItem('Import Historical Emails', 'importHistoricalEmails')
-    .addSeparator()
-    .addItem('Reset Historical Scan State', 'resetHistoricalScanState')
-    .addItem('Reset All Tracker State', 'resetAllTrackerState')
-    .addSeparator()
-    .addItem('Show Debug State', 'logTrackerDebugState')
-    .addItem('Compare Gmail Query Counts', 'compareGmailQueryCountsForTargetSpreadsheet')
-    .addItem('Run Tracker Tests', 'runTrackerTests')
-    .addItem('Set up daily scanning', 'setupTriggers')
-    .addItem('Refresh Visualizations', 'refreshVisualizations')
-    .addItem('Create Rejection Follow-up Drafts', 'createRejectionFollowupDrafts')
-    .addItem('Open Feedback Form', 'openFeedbackForm')
-    .addSeparator()
-    .addItem('Migrate Spreadsheet (Hide Thread ID)', 'migrateSpreadsheet')
-    .addToUi();
-}
-```
-
-- [ ] **Step 2: Add script properties reset helpers in `scanUtils.gs`**
-Add helper to delete all properties so the user can easily reset state.
-
-In `scanUtils.gs`, add:
-```javascript
-function clearAllTrackerState() {
-  const properties = scanProperties_();
-  properties.deleteProperty(SCAN_KEYS.lastSuccess);
-  properties.deleteProperty(SCAN_KEYS.historicalWindowEnd);
-  properties.deleteProperty(SCAN_KEYS.historicalSearchStart);
-  properties.deleteProperty(SCAN_KEYS.historicalSearchQuery);
-}
-```
-
-- [ ] **Step 3: Add menu callback handlers in `main.gs`**
-Add the functions callable by the menu items.
-
-In `main.gs`, append:
-```javascript
-function resetHistoricalScanState() {
-  clearHistoricalScanState();
-  SpreadsheetApp.getActive().toast('Historical scan state has been reset! Backfill will start cleanly from today.');
-  Logger.log('Historical scan state has been explicitly reset by the user.');
-}
-
-function resetAllTrackerState() {
-  clearAllTrackerState();
-  SpreadsheetApp.getActive().toast('All tracker scan state has been reset! Scanning will re-import all historical and recent emails.');
-  Logger.log('All tracker scan state has been explicitly reset by the user.');
-}
-```
-
-- [ ] **Step 4: Commit changes**
-```bash
-git add main.gs scanUtils.gs
-git commit -m "feat: add explicit state reset options to spreadsheet menu"
-```
+- [ ] **Step 1: Verify state reset features**
+Confirm `resetHistoricalScanState` and `resetAllTrackerState` are exposed in the menu and operational. (Completed)
 
 ---
 
-### Task 4: Query Exclusion Overhaul
+### Task 4: Opt-In Noise Filter Conversion
 
 **Files:**
 - Modify: `/Users/tmaerz/projects/AppTrack-GScript/scanUtils.gs`
 
-- [ ] **Step 1: Remove `-category:promotions` and `-label:social`**
-Gmail automatically categorizes some job updates/confirmations as promotions. Removing this exclusion will prevent false negatives.
+- [ ] **Step 1: Convert noise filter to Opt-In model**
+Instead of allowing everything by default, we will only keep messages that have high-confidence signal phrases OR are from trusted ATS/hiring domains. Newsletters and generic updates will be skipped by default.
 
-In `scanUtils.gs`, replace `buildGmailSearchQuery(mode, window)` with:
+In `scanUtils.gs`, update `shouldSkipMessage(subject, from, body)`:
 ```javascript
-function buildGmailSearchQuery(mode, window) {
-  const signalGroup = '(subject:("thank you for applying" OR "thank you for your application" OR "your application was sent" OR "application submitted" OR "successfully applied" OR "your application to" OR "your application for" OR "application received" OR "we received your application" OR "confirmation of your application" OR "interview invitation" OR "schedule interview" OR assessment OR "coding challenge" OR "job offer" OR "status update" OR "regarding your application") OR body:("thank you for your interest" OR "your application was sent" OR "application submitted" OR "successfully applied" OR "your application to" OR "your application for") OR from:(@talent OR @careers OR @jobs OR @hr OR @recruiting OR @hire OR jobs-noreply@linkedin.com OR candidates.workablemail.com OR @inbound.workablemail.com OR greenhouse.io OR lever.co OR myworkdayjobs.com OR workday.com OR icims.com OR smartrecruiters.com OR indeed.com OR successfactors.com))';
-  const exclusions = '-from:jobs-listings@linkedin.com -from:@glassdoor.com -subject:"password reset" -subject:"weekly application update" -subject:digest';
-  return signalGroup + ' ' + exclusions + ' ' + buildDateWindowFilter(window);
+function shouldSkipMessage(subject, from, body) {
+  const haystack = (String(subject || '') + ' ' + String(body || '')).toLowerCase();
+  const domain = senderDomain_(from);
+  
+  // High-confidence noise skips
+  if (domain === 'jobs-listings.linkedin.com' || domain === 'jobs-listings@linkedin.com') return true;
+  if (haystack.includes('weekly application update') || haystack.includes('jobs you may be interested in')) return true;
+  if (haystack.includes('password reset')) return true;
+  if (haystack.includes('calendar notification') && !haystack.includes('interview')) return true;
+  
+  // If it's a positive application signal (Applied, Interview, Assessment, Offer, Rejection)
+  if (isPositiveApplicationSignal_(haystack, domain)) {
+    return false; // Do not skip! Keep this email.
+  }
+  
+  // If it doesn't match any positive signal, skip it by default (to filter out newsletters/security alerts)
+  return true; 
 }
 ```
 
-- [ ] **Step 2: Commit changes**
+- [ ] **Step 2: Update positive application signal check**
+Refine `isPositiveApplicationSignal_` to include more robust keywords, including rejections, and to match specific ATS domains.
+
+In `scanUtils.gs`, replace `isPositiveApplicationSignal_` with:
+```javascript
+function isPositiveApplicationSignal_(haystack, domain) {
+  if (haystack.includes('your application was sent')) return true;
+  if (haystack.includes('application submitted')) return true;
+  if (haystack.includes('successfully applied')) return true;
+  if (haystack.includes('application received')) return true;
+  if (haystack.includes('we received your application')) return true;
+  if (haystack.includes('thank you for applying')) return true;
+  if (haystack.includes('thank you for your application')) return true;
+  if (haystack.includes('thank you for your interest')) return true;
+  if (haystack.includes('thank you for taking the time to apply')) return true;
+  if (haystack.includes('interview')) return true;
+  if (haystack.includes('assessment')) return true;
+  if (haystack.includes('coding challenge')) return true;
+  if (haystack.includes('not moving forward')) return true;
+  if (haystack.includes('regret to inform')) return true;
+  if (haystack.includes('other candidates')) return true;
+  if (haystack.includes('unable to offer')) return true;
+  if (haystack.includes('congratulations')) return true;
+  if (haystack.includes('offer letter')) return true;
+  
+  // Match standard job ATS/candidate platform domains
+  return /(^|\.)(greenhouse\.io|lever\.co|myworkdayjobs\.com|workday\.com|icims\.com|smartrecruiters\.com|indeed\.com|successfactors\.com|workablemail\.com|linkedin\.com)$/.test(domain);
+}
+```
+
+- [ ] **Step 3: Commit changes**
 ```bash
 git add scanUtils.gs
-git commit -m "fix: remove category:promotions and label:social exclusions from search query"
+git commit -m "fix: convert noise filter to opt-in allowlist model to exclude newsletters"
 ```
 
 ---
 
-### Task 5: Diagnostic Mailbox Audit Tool
+### Task 5: Uncapped Paging Diagnostic Audit Tool
 
 **Files:**
 - Modify: `/Users/tmaerz/projects/AppTrack-GScript/main.gs`
 
-- [ ] **Step 1: Add diagnostic audit menu option**
-In `main.gs`, add a diagnostic menu item inside `onOpen()`:
-```javascript
-    .addItem('Run Diagnostic Mailbox Audit', 'runDiagnosticMailboxAudit')
-```
+- [ ] **Step 1: Update `runDiagnosticMailboxAudit` with paging loop**
+Rewrite the diagnostic script in `main.gs` to fetch matching threads in blocks of 500 in a `while` loop until 0 threads are returned, computing the absolute count.
 
-- [ ] **Step 2: Write `runDiagnosticMailboxAudit` in `main.gs`**
-Add a diagnostic script that searches the entire mailbox (no date limits) using the broad query, matches it against skip rules, and counts results to pinpoint exactly which emails are being filtered out.
-
-Add the following function in `main.gs`:
+In `main.gs`, replace `runDiagnosticMailboxAudit()` with:
 ```javascript
 function runDiagnosticMailboxAudit() {
   const broadQuery = '(application OR applied OR interview OR recruiter OR careers OR hiring OR "for applying" OR "application submitted" OR "your application")';
   const exclusions = '-from:jobs-listings@linkedin.com -from:@glassdoor.com -subject:"password reset" -subject:"weekly application update" -subject:digest';
   const fullBroadQuery = broadQuery + ' ' + exclusions;
   
-  Logger.log('Starting Diagnostic Mailbox Audit...');
+  Logger.log('Starting Diagnostic Mailbox Audit (Uncapped)...');
   Logger.log('Broad query: ' + fullBroadQuery);
   
-  let threads;
-  try {
-    threads = GmailApp.search(fullBroadQuery, 0, 500);
-  } catch (e) {
-    Logger.log('Failed to execute search: ' + e.toString());
-    SpreadsheetApp.getActive().toast('Diagnostic failed: ' + e.toString());
-    return;
+  let allThreads = [];
+  let page = 0;
+  const pageSize = 500;
+  
+  while (true) {
+    let threadsPage;
+    try {
+      threadsPage = GmailApp.search(fullBroadQuery, page * pageSize, pageSize);
+    } catch (e) {
+      Logger.log(`Failed to execute search at page ${page}: ` + e.toString());
+      break;
+    }
+    
+    if (!threadsPage || threadsPage.length === 0) {
+      break;
+    }
+    
+    allThreads = allThreads.concat(threadsPage);
+    Logger.log(`Fetched page ${page + 1}: found ${threadsPage.length} threads (Cumulative: ${allThreads.length})`);
+    
+    if (threadsPage.length < pageSize) {
+      break; // Last page reached
+    }
+    
+    page++;
+    Utilities.sleep(100); // Avoid rate limiting
   }
   
-  Logger.log('Total threads matching broad query: ' + threads.length);
+  Logger.log('Total threads matching broad query: ' + allThreads.length);
   
   let skippedCount = 0;
   let parsedCount = 0;
   
-  for (let i = 0; i < threads.length; i++) {
-    const thread = threads[i];
+  for (let i = 0; i < allThreads.length; i++) {
+    const thread = allThreads[i];
     const messages = thread.getMessages();
     if (messages.length === 0) continue;
     
@@ -358,16 +194,29 @@ function runDiagnosticMailboxAudit() {
   }
   
   Logger.log(`Diagnostic Complete!`);
-  Logger.log(`Total threads analyzed: ${threads.length}`);
+  Logger.log(`Total threads analyzed: ${allThreads.length}`);
   Logger.log(`Threads matched (parsed): ${parsedCount}`);
   Logger.log(`Threads skipped (noise filter): ${skippedCount}`);
   
-  SpreadsheetApp.getActive().toast(`Diagnostic Complete: Found ${threads.length} total, Parsed ${parsedCount}, Skipped ${skippedCount}`);
+  SpreadsheetApp.getActive().toast(`Diagnostic Complete: Found ${allThreads.length} total, Parsed ${parsedCount}, Skipped ${skippedCount}`);
 }
 ```
 
-- [ ] **Step 3: Commit changes**
+- [ ] **Step 2: Commit changes**
 ```bash
 git add main.gs
-git commit -m "feat: add diagnostic mailbox audit tool to identify false negatives"
+git commit -m "feat: add uncapped paging diagnostic mailbox audit tool"
 ```
+
+---
+
+### Task 6: Push changes using clasp & Run tests
+
+**Files:**
+- Execution: clasp push
+
+- [ ] **Step 1: Push code**
+Run `clasp push` to deploy code to Google Apps Script.
+
+- [ ] **Step 2: Run verification**
+Advise the user to run `Run Diagnostic Mailbox Audit` to observe the true count and see the precision of the new opt-in filters.
