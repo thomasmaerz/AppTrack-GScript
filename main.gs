@@ -776,22 +776,49 @@ function runDiagnosticMailboxAudit() {
     }
   }
   
-  // Write to temporary sheet named "Audit Logs"
+  // Write to datestamped temporary sheet named "Audit Logs - YYYY-MM-DD HH:mm"
+  const timestamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm");
+  const tabName = `Audit Logs - ${timestamp}`;
+  
   const spreadsheet = getOrCreateSpreadsheet();
-  let auditSheet = spreadsheet.getSheetByName("Audit Logs");
+  let auditSheet = spreadsheet.getSheetByName(tabName);
   if (auditSheet) {
     auditSheet.clear();
   } else {
-    auditSheet = spreadsheet.insertSheet("Audit Logs");
+    auditSheet = spreadsheet.insertSheet(tabName);
   }
   
   auditSheet.getRange(1, 1, auditData.length, auditData[0].length).setValues(auditData);
   auditSheet.autoResizeColumns(1, auditData[0].length);
+  
+  // Write to unfiltered "Broad Search Dump" tab if not already present
+  let broadSheet = spreadsheet.getSheetByName("Broad Search Dump");
+  if (!broadSheet) {
+    broadSheet = spreadsheet.insertSheet("Broad Search Dump");
+    const broadData = [["Thread ID", "Date", "From", "Subject"]];
+    for (let i = 0; i < allThreads.length; i++) {
+      const thread = allThreads[i];
+      const messages = thread.getMessages();
+      if (messages.length === 0) continue;
+      const firstMsg = messages[0];
+      broadData.push([
+        thread.getId(),
+        firstMsg.getDate().toISOString(),
+        firstMsg.getFrom(),
+        firstMsg.getSubject()
+      ]);
+    }
+    broadSheet.getRange(1, 1, broadData.length, broadData[0].length).setValues(broadData);
+    broadSheet.autoResizeColumns(1, broadData[0].length);
+    Logger.log("Created 'Broad Search Dump' tab with raw unfiltered search results.");
+  } else {
+    Logger.log("'Broad Search Dump' tab already exists, skipping creation.");
+  }
   
   Logger.log(`Diagnostic Complete!`);
   Logger.log(`Total matching threads: ${allThreads.length}`);
   Logger.log(`Threads matched (parsed): ${parsedCount}`);
   Logger.log(`Threads skipped (noise filter): ${skippedCount}`);
   
-  SpreadsheetApp.getActive().toast(`Diagnostic Complete: Found ${allThreads.length} total strict matches! Open the "Audit Logs" sheet tab to view all entries!`);
+  SpreadsheetApp.getActive().toast(`Diagnostic Complete: Found ${allThreads.length} total strict matches! Open the "${tabName}" sheet tab to view all entries!`);
 }

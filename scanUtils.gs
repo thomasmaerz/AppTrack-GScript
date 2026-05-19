@@ -124,14 +124,33 @@ function shouldSkipMessage(subject, from, body) {
   const domain = senderDomain_(from);
   const fromLower = String(from || '').toLowerCase();
 
+  // Unified list of trusted recruitment/ATS domains
+  const recruitmentDomains = [
+    'greenhouse.io', 'lever.co', 'myworkdayjobs.com', 'workday.com', 'myworkday.com', 'workdayjobs.com',
+    'icims.com', 'smartrecruiters.com', 'successfactors.com', 'workablemail.com',
+    'ashbyhq.com', 'recruitee.com', 'breezy.hr', 'jazzhr.com', 'bamboohr.com',
+    'workable.com', 'jobvite.com', 'oracle.com', 'ukg.com', 'paycor.com',
+    'paylocity.com', 'adp.com', 'rippling.com', 'darwinbox.com', 'phenom.com',
+    'avature.net', 'randstad.ca', 'randstad.com', 'procom.ca', 'procomservices.com',
+    'roberthalf.com', 'roberthalf.ca', 'hays.ca', 'hays.com', 'teema.com',
+    'agilus.ca', 'insight.com', 'appointz.com'
+  ];
+
+  const isRecruitmentDomain = recruitmentDomains.some(d => domain === d || domain.endsWith('.' + d));
+
   // A. Indeed Apply Direct Confirmation Rescue
   if (domain === 'indeedapply.indeed.com' || fromLower.includes('indeedapply@indeed.com') || lowerSubject.startsWith('indeed application:')) {
     return false;
   }
 
   // B. Workday & Greenhouse Transactional Subject Rescue
-  const isAtsDomain = /(^|\.)(greenhouse\.io|lever\.co|myworkdayjobs\.com|workday\.com|icims\.com|smartrecruiters\.com|successfactors\.com|workablemail\.com|ashbyhq\.com|recruitee\.com|breezy\.hr|jazzhr\.com|bamboohr\.com|workable\.com|jobvite\.com|oracle\.com|ukg\.com|paycor\.com|paylocity\.com|adp\.com|rippling\.com|darwinbox\.com|phenom\.com|avature\.net)$/i.test(domain);
-  if (isAtsDomain && (lowerSubject === 'regarding your application' || lowerSubject === 'your application' || lowerSubject === 'thank you for your interest')) {
+  if (isRecruitmentDomain && (
+      lowerSubject.includes('regarding your application') || 
+      lowerSubject.includes('your application') || 
+      lowerSubject.includes('thank you for your interest') ||
+      lowerSubject.includes('thank you for applying') ||
+      lowerSubject.includes('thanks for applying')
+  )) {
     return false;
   }
 
@@ -204,8 +223,8 @@ function shouldSkipMessage(subject, from, body) {
     return false; // Keep it immediately!
   }
 
-  // I. Trusted ATS domains are automatically kept
-  if (isAtsDomain) {
+  // I. Trusted ATS / recruitment domains are automatically kept
+  if (isRecruitmentDomain) {
     return false; 
   }
 
@@ -233,6 +252,9 @@ function shouldSkipMessage(subject, from, body) {
 
   const bodyHasPositive = positiveKeywords.some(keyword => lowerBody.includes(keyword));
   if (bodyHasPositive) {
+    if (isRecruitmentDomain) {
+      return false; // Recruitment domains are immune to newsletter noise checks
+    }
     const bodyHasNoise = (
       domain.includes('substack') || 
       domain.includes('beehiiv') || 
