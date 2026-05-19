@@ -71,11 +71,15 @@ const GeminiClient = {
     // Method 1: Try keyless OAuth first
     try {
       const oauthToken = ScriptApp.getOAuthToken();
+      const gcpProjectId = PropertiesService.getScriptProperties().getProperty('gcp_project_id') || 'gen-lang-client-0843415856';
       const url = `https://generativelanguage.googleapis.com/v1beta/${GEMINI_CONFIG.model}:generateContent`;
       const options = {
         method: 'post',
         contentType: 'application/json',
-        headers: { 'Authorization': 'Bearer ' + oauthToken },
+        headers: { 
+          'Authorization': 'Bearer ' + oauthToken,
+          'x-goog-user-project': gcpProjectId
+        },
         payload: JSON.stringify(payload),
         muteHttpExceptions: true
       };
