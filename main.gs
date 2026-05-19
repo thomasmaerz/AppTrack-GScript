@@ -723,11 +723,9 @@ function runDiagnosticMailboxAudit() {
   let skippedCount = 0;
   let parsedCount = 0;
   
-  // Cap detailed sample analysis at 100 to prevent execution timeout
-  const sampleLimit = Math.min(allThreads.length, 100);
-  Logger.log(`Analyzing details for a sample of the first ${sampleLimit} threads...`);
+  Logger.log(`Analyzing details for all ${allThreads.length} threads...`);
   
-  for (let i = 0; i < sampleLimit; i++) {
+  for (let i = 0; i < allThreads.length; i++) {
     const thread = allThreads[i];
     const messages = thread.getMessages();
     if (messages.length === 0) continue;
@@ -757,9 +755,8 @@ function runDiagnosticMailboxAudit() {
   
   Logger.log(`Diagnostic Complete!`);
   Logger.log(`Total matching threads: ${allThreads.length}`);
-  Logger.log(`Sample analyzed: ${sampleLimit}`);
-  Logger.log(`Sample matched (parsed): ${parsedCount}`);
-  Logger.log(`Sample skipped (noise filter): ${skippedCount}`);
+  Logger.log(`Threads matched (parsed): ${parsedCount}`);
+  Logger.log(`Threads skipped (noise filter): ${skippedCount}`);
   
-  SpreadsheetApp.getActive().toast(`Diagnostic Complete: Found ${allThreads.length} total strict matches! (Sample analyzed: ${sampleLimit})`);
+  SpreadsheetApp.getActive().toast(`Diagnostic Complete: Found ${allThreads.length} total strict matches! (Parsed ${parsedCount}, Skipped ${skippedCount})`);
 }
