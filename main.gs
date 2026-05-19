@@ -883,7 +883,7 @@ function runBroadSearchGapAudit() {
       firstMsg.getDate().toISOString(),
       firstMsg.getFrom(),
       firstMsg.getSubject(),
-      firstMsg.getSnippet(), // Use message.getSnippet() directly
+      thread.getSnippet(),
       thread.getId()
     ]);
   }
