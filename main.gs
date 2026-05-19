@@ -31,6 +31,7 @@ function onOpen() {
     .addItem('Compare Gmail Query Counts', 'compareGmailQueryCountsForTargetSpreadsheet')
     .addItem('Run Diagnostic Mailbox Audit', 'runDiagnosticMailboxAudit')
     .addItem('Run Broad Search Gap Audit', 'runBroadSearchGapAudit')
+    .addItem('Run Gemini Broad Gap Audit', 'runGeminiBroadGapAudit')
     .addItem('Run Tracker Tests', 'runTrackerTests')
     .addItem('Set up daily scanning', 'setupTriggers')
     .addItem('Refresh Visualizations', 'refreshVisualizations')
@@ -906,4 +907,145 @@ function runBroadSearchGapAudit() {
   gapSheet.autoResizeColumns(1, gapData[0].length);
   
   SpreadsheetApp.getActive().toast(`Gap audit complete! Found ${gapCount} potential missed emails in "Broad Search Gap Audit" tab!`);
+}
+
+function runGeminiBroadGapAudit() {
+  const runStart = new Date();
+  const dateWindow = 'after:' + formatScanDate_(daysBefore_(runStart, 90));
+  const broadQuery = '(application OR applied OR interview OR recruiter OR careers OR hiring OR "for applying" OR "application submitted" OR "your application") ' + dateWindow;
+  
+  Logger.log('Starting Gemini LLM Broad Search Gap Audit (90-day window)...');
+  
+  // 1. Fetch broad query threads
+  const threads = [];
+  let page = 0;
+  const pageSize = 100; // Keep page size tight
+  while (true) {
+    let threadsPage = GmailApp.search(broadQuery, page * pageSize, pageSize);
+    if (!threadsPage || threadsPage.length === 0) break;
+    threadsPage.forEach(t => threads.push(t));
+    if (threadsPage.length < pageSize || threads.length >= 100) break; // Bounded at 100 threads for audit speed
+    page++;
+  }
+  
+  Logger.log(`Found ${threads.length} broad threads to audit.`);
+  
+  // 2. Map thread metadata and regex classifications
+  const threadLogs = [];
+  const threadMap = new Map(); // threadId -> raw thread
+  
+  for (const thread of threads) {
+    const messages = thread.getMessages();
+    if (messages.length === 0) continue;
+    const firstMsg = messages[0];
+    const subject = firstMsg.getSubject();
+    const from = firstMsg.getFrom();
+    const body = firstMsg.getPlainBody() || '';
+    const snippet = body.substring(0, 150).replace(/\s+/g, ' ').trim();
+    
+    // Evaluate Regex classification (PASS vs SKIP)
+    const regexSkip = shouldSkipMessage(subject, from, body);
+    const regexDecision = regexSkip ? 'SKIP' : 'PASS';
+    
+    const logItem = {
+      threadId: thread.getId(),
+      date: firstMsg.getDate().toISOString(),
+      from: from,
+      subject: subject,
+      snippet: snippet,
+      regexDecision: regexDecision
+    };
+    
+    threadLogs.push(logItem);
+    threadMap.set(thread.getId(), logItem);
+  }
+
+  // 3. Batch threads and call Gemini
+  const geminiMap = new Map(); // threadId -> classification result
+  for (let i = 0; i < threadLogs.length; i += GEMINI_CONFIG.batchSize) {
+    const batch = threadLogs.slice(i, i + GEMINI_CONFIG.batchSize);
+    Logger.log(`Sending batch ${Math.floor(i / GEMINI_CONFIG.batchSize) + 1} to Gemini (${batch.length} threads)...`);
+    try {
+      const results = GeminiClient.classifyBatch(batch);
+      results.forEach(res => geminiMap.set(res.threadId, res));
+    } catch (e) {
+      Logger.log("Error classifying batch: " + e.toString());
+    }
+  }
+
+  // 4. Align regex and Gemini decisions into audit rows
+  const auditData = [[
+    "Thread ID", "Date", "From", "Subject", "Regex Decision", 
+    "Gemini Decision", "Gap Status", "Gemini Class", 
+    "Gemini Company", "Gemini Title", "Gemini Reasoning", "Snippet"
+  ]];
+
+  for (const logItem of threadLogs) {
+    const geminiRes = geminiMap.get(logItem.threadId);
+    
+    let geminiDecision = 'SKIP';
+    let isJobRelated = false;
+    let geminiClass = 'Noise';
+    let reasoning = 'No classification returned by model.';
+    let cleanCompany = 'Unlisted';
+    let cleanTitle = 'Unlisted';
+    
+    if (geminiRes) {
+      isJobRelated = geminiRes.isJobRelated;
+      geminiDecision = isJobRelated ? 'PASS' : 'SKIP';
+      reasoning = geminiRes.reasoning;
+      cleanCompany = geminiRes.cleanCompany || 'Unlisted';
+      cleanTitle = geminiRes.cleanTitle || 'Unlisted';
+      
+      const classMap = {
+        'APPLIED': 'Applied', 'INTERVIEW': 'Interview Request', 
+        'ASSESSMENT': 'Assessment', 'REJECTED': 'Rejected', 
+        'OFFER': 'Offer Received', 'NOISE': 'Noise'
+      };
+      geminiClass = classMap[geminiRes.classification] || 'Noise';
+    }
+
+    // Determine Gap Status
+    let gapStatus = 'MATCH';
+    if (logItem.regexDecision === 'SKIP' && geminiDecision === 'PASS') {
+      gapStatus = 'FALSE_SKIP';
+    } else if (logItem.regexDecision === 'PASS' && geminiDecision === 'SKIP') {
+      gapStatus = 'FALSE_PASS';
+    }
+
+    auditData.push([
+      logItem.threadId,
+      logItem.date,
+      logItem.from,
+      logItem.subject,
+      logItem.regexDecision,
+      geminiDecision,
+      gapStatus,
+      geminiClass,
+      cleanCompany,
+      cleanTitle,
+      reasoning,
+      logItem.snippet
+    ]);
+  }
+
+  // 5. Output comparative data to tab "BroadGapLLM"
+  const spreadsheet = getOrCreateSpreadsheet();
+  let gapSheet = spreadsheet.getSheetByName("BroadGapLLM");
+  if (gapSheet) {
+    gapSheet.clear();
+  } else {
+    gapSheet = spreadsheet.insertSheet("BroadGapLLM");
+  }
+  
+  gapSheet.getRange(1, 1, auditData.length, auditData[0].length).setValues(auditData);
+  
+  // Format tab nicely (auto-resize and hide Thread ID column)
+  gapSheet.autoResizeColumns(1, auditData[0].length);
+  gapSheet.hideColumn(gapSheet.getRange(1, 1, 1, 1));
+  
+  // Apply a clean alternate row color schema and formatting
+  SpreadsheetUtils.formatGapLLMSheet(gapSheet, auditData.length);
+  
+  SpreadsheetApp.getActive().toast(`Gemini Broad Search Gap Audit complete! Open the "BroadGapLLM" sheet tab to inspect results!`);
 }

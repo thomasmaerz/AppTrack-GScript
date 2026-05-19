@@ -811,6 +811,45 @@ const SpreadsheetUtils = {
       .build();
     
     sheet.insertChart(chart);
+  },
+
+  formatGapLLMSheet: function(sheet, rowCount) {
+    if (rowCount <= 1) return;
+    
+    // Header styling
+    const headerRange = sheet.getRange(1, 1, 1, sheet.getLastColumn());
+    headerRange.setBackground("#34495e")
+               .setFontColor("#ffffff")
+               .setFontWeight("bold")
+               .setHorizontalAlignment("center");
+               
+    // Gap Status conditional highlight
+    const gapStatusRange = sheet.getRange(2, 7, rowCount - 1, 1);
+    const gapStatusValues = gapStatusRange.getValues();
+    const backgrounds = [];
+    const fontColors = [];
+    
+    for (let i = 0; i < gapStatusValues.length; i++) {
+      const val = gapStatusValues[i][0];
+      if (val === 'FALSE_SKIP') {
+        backgrounds.push(["#fadbd8"]); // Soft red
+        fontColors.push(["#900c3f"]);
+      } else if (val === 'FALSE_PASS') {
+        backgrounds.push(["#fdebd0"]); // Soft orange
+        fontColors.push(["#a04000"]);
+      } else {
+        backgrounds.push(["#eafaf1"]); // Soft green
+        fontColors.push(["#196f3d"]);
+      }
+    }
+    
+    gapStatusRange.setBackgrounds(backgrounds)
+                   .setFontColors(fontColors)
+                   .setFontWeight("bold")
+                   .setHorizontalAlignment("center");
+                   
+    // Set alternate formatting for standard rows
+    sheet.setRowHeights(2, rowCount - 1, 22);
   }
 };
 
