@@ -29,6 +29,7 @@ function onOpen() {
     .addSeparator()
     .addItem('Show Debug State', 'logTrackerDebugState')
     .addItem('Compare Gmail Query Counts', 'compareGmailQueryCountsForTargetSpreadsheet')
+    .addItem('Run Diagnostic Mailbox Audit', 'runDiagnosticMailboxAudit')
     .addItem('Run Tracker Tests', 'runTrackerTests')
     .addItem('Set up daily scanning', 'setupTriggers')
     .addItem('Refresh Visualizations', 'refreshVisualizations')
@@ -679,4 +680,62 @@ function resetAllTrackerState() {
   clearAllTrackerState();
   SpreadsheetApp.getActive().toast('All tracker scan state has been reset! Scanning will re-import all historical and recent emails.');
   Logger.log('All tracker scan state has been explicitly reset by the user.');
+}
+
+function runDiagnosticMailboxAudit() {
+  const broadQuery = '(application OR applied OR interview OR recruiter OR careers OR hiring OR "for applying" OR "application submitted" OR "your application")';
+  const exclusions = '-from:jobs-listings@linkedin.com -from:@glassdoor.com -subject:"password reset" -subject:"weekly application update" -subject:digest';
+  const fullBroadQuery = broadQuery + ' ' + exclusions;
+  
+  Logger.log('Starting Diagnostic Mailbox Audit...');
+  Logger.log('Broad query: ' + fullBroadQuery);
+  
+  let threads;
+  try {
+    threads = GmailApp.search(fullBroadQuery, 0, 500);
+  } catch (e) {
+    Logger.log('Failed to execute search: ' + e.toString());
+    SpreadsheetApp.getActive().toast('Diagnostic failed: ' + e.toString());
+    return;
+  }
+  
+  Logger.log('Total threads matching broad query: ' + threads.length);
+  
+  let skippedCount = 0;
+  let parsedCount = 0;
+  
+  for (let i = 0; i < threads.length; i++) {
+    const thread = threads[i];
+    const messages = thread.getMessages();
+    if (messages.length === 0) continue;
+    
+    const firstMsg = messages[0];
+    const subject = firstMsg.getSubject();
+    const from = firstMsg.getFrom();
+    const body = firstMsg.getPlainBody();
+    
+    const skip = shouldSkipMessage(subject, from, body);
+    
+    if (skip) {
+      skippedCount++;
+      if (skippedCount <= 20) {
+        Logger.log(`[SKIP] From: ${from} | Subject: ${subject}`);
+      }
+    } else {
+      parsedCount++;
+      if (parsedCount <= 20) {
+        const company = CompanyUtils.extractCompany(subject, body, from, firstMsg.getBody());
+        const rawJobTitle = JobUtils.extractJobTitle(subject, body, from, firstMsg.getBody());
+        const jobTitle = JobUtils.cleanJobTitle(rawJobTitle);
+        Logger.log(`[PASS] From: ${from} | Subject: ${subject} => Co: ${company} | Title: ${jobTitle}`);
+      }
+    }
+  }
+  
+  Logger.log(`Diagnostic Complete!`);
+  Logger.log(`Total threads analyzed: ${threads.length}`);
+  Logger.log(`Threads matched (parsed): ${parsedCount}`);
+  Logger.log(`Threads skipped (noise filter): ${skippedCount}`);
+  
+  SpreadsheetApp.getActive().toast(`Diagnostic Complete: Found ${threads.length} total, Parsed ${parsedCount}, Skipped ${skippedCount}`);
 }
