@@ -12,6 +12,7 @@
 // Configuration
 const SPREADSHEET_NAME = "Application Tracker";
 const DEBUG_SPREADSHEET_ID = "1FnCwtwAxCEp9mK-aNtaJnM-iAXbCsGzNIOOK3f7nEr4";
+const TARGET_SPREADSHEET_ID = null; // Dynamically binds to active spreadsheet
 
 
 /**
@@ -23,6 +24,7 @@ function onOpen() {
     .addItem('Scan Emails', 'scanEmails')
     .addItem('Import Historical Emails', 'importHistoricalEmails')
     .addItem('Show Debug State', 'logTrackerDebugState')
+    .addItem('Compare Gmail Query Counts', 'compareGmailQueryCountsForTargetSpreadsheet')
     .addItem('Run Tracker Tests', 'runTrackerTests')
     .addItem('Set up daily scanning', 'setupTriggers')
     .addItem('Refresh Visualizations', 'refreshVisualizations')
@@ -55,15 +57,15 @@ function setupTriggers() {
  */
 function getOrCreateSpreadsheet(spreadsheetId) {
   let spreadsheet;
-  let isNewSpreadsheet = false;
 
   if (spreadsheetId) {
-    spreadsheet = SpreadsheetApp.openById(spreadsheetId);
+    try {
+      spreadsheet = SpreadsheetApp.openById(spreadsheetId);
+    } catch (e) {
+      Logger.log("Failed to open spreadsheet by ID: " + e.toString());
+    }
   }
 
-  // Prefer the spreadsheet that contains this bound Apps Script project.
-  // Falling back to Drive by name can write to a different file than the
-  // spreadsheet whose menu the user clicked.
   if (!spreadsheet) {
     try {
       spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
@@ -73,24 +75,18 @@ function getOrCreateSpreadsheet(spreadsheetId) {
   }
 
   if (!spreadsheet) {
-    // Try to find existing spreadsheet for standalone script usage.
     const files = DriveApp.getFilesByName(SPREADSHEET_NAME);
     if (files.hasNext()) {
       const file = files.next();
       spreadsheet = SpreadsheetApp.open(file);
     } else {
-    // Create new spreadsheet
       spreadsheet = SpreadsheetApp.create(SPREADSHEET_NAME);
-      isNewSpreadsheet = true;
     }
   }
   
-  // Set up headers if needed
   const sheet = spreadsheet.getSheetByName("Applications");
 
-  // Check if sheet exists
   if (!sheet) {
-    // Create the sheet if it doesn't exist
     const newSheet = spreadsheet.insertSheet("Applications");
     SpreadsheetUtils.setupSheet(newSheet);
     return spreadsheet;
@@ -98,12 +94,11 @@ function getOrCreateSpreadsheet(spreadsheetId) {
 
   const firstCell = sheet.getRange(1, 1).getValue();
 
-  if (isNewSpreadsheet || firstCell !== "Job Title") {
-    // Use SpreadsheetUtils to set up the sheet
+  if (firstCell !== "Job Title") {
     SpreadsheetUtils.setupSheet(sheet);
   }
 
-return spreadsheet;
+  return spreadsheet;
 }
 
 function logTrackerDebugState() {
@@ -122,6 +117,10 @@ function scanEmailsForTargetSpreadsheet() {
   return scanEmails('recent', DEBUG_SPREADSHEET_ID);
 }
 
+function compareGmailQueryCountsForTargetSpreadsheet() {
+  return compareGmailQueryCountsForSpreadsheet(DEBUG_SPREADSHEET_ID);
+}
+
 function logTrackerDebugStateForSpreadsheet(spreadsheetId) {
   const spreadsheet = getOrCreateSpreadsheet(spreadsheetId);
   const sheet = spreadsheet.getSheetByName("Applications");
@@ -135,11 +134,35 @@ function logTrackerDebugStateForSpreadsheet(spreadsheetId) {
   return { spreadsheetName: spreadsheet.getName(), spreadsheetUrl: spreadsheet.getUrl(), rows: sheet ? sheet.getLastRow() : null, columns: sheet ? sheet.getLastColumn() : null, recentQuery: buildGmailSearchQuery('recent', recentWindow), historicalQuery: buildGmailSearchQuery('historical', historicalWindow) };
 }
 
+function compareGmailQueryCountsForSpreadsheet(spreadsheetId) {
+  const spreadsheet = getOrCreateSpreadsheet(spreadsheetId);
+  const runStart = new Date();
+  const historicalWindow = getScanWindow('historical', runStart);
+  const strictQuery = buildGmailSearchQuery('historical', historicalWindow);
+  const broadQuery = buildBroadGmailSearchQuery(historicalWindow);
+  const atsQuery = buildAtsGmailSearchQuery(historicalWindow);
+  const dateOnlyQuery = buildDateWindowFilter(historicalWindow);
+  const strictCount = countGmailQueryUpToCap(strictQuery, SCAN_CONFIG.queryCountCap);
+  const broadCount = countGmailQueryUpToCap(broadQuery, SCAN_CONFIG.queryCountCap);
+  const atsCount = countGmailQueryUpToCap(atsQuery, SCAN_CONFIG.queryCountCap);
+  const dateOnlyCount = countGmailQueryUpToCap(dateOnlyQuery, SCAN_CONFIG.queryCountCap);
+  Logger.log('Query comparison spreadsheet=' + spreadsheet.getUrl());
+  Logger.log('Query comparison window=' + formatScanDate_(historicalWindow.start) + '..' + formatScanDate_(historicalWindow.end));
+  Logger.log('Strict tracker count=' + strictCount.count + (strictCount.capped ? '+' : ''));
+  Logger.log('Broad application count=' + broadCount.count + (broadCount.capped ? '+' : ''));
+  Logger.log('ATS/domain count=' + atsCount.count + (atsCount.capped ? '+' : ''));
+  Logger.log('Date-only sanity count=' + dateOnlyCount.count + (dateOnlyCount.capped ? '+' : ''));
+  Logger.log('Strict query: ' + strictQuery);
+  Logger.log('Broad query: ' + broadQuery);
+  Logger.log('ATS query: ' + atsQuery);
+  return { windowStart: formatScanDate_(historicalWindow.start), windowEnd: formatScanDate_(historicalWindow.end), strict: strictCount, broad: broadCount, ats: atsCount, dateOnly: dateOnlyCount };
+}
+
 /**
  * Manually refreshes visualizations without scanning emails
  */
 function refreshVisualizations() {
-  const spreadsheet = getOrCreateSpreadsheet();
+  const spreadsheet = getOrCreateSpreadsheet(TARGET_SPREADSHEET_ID);
   const sheet = spreadsheet.getSheetByName("Applications");
 
   // Apply formatting first
@@ -159,7 +182,7 @@ function refreshVisualizations() {
  * and ensures thread IDs are preserved in a hidden column
  */
 function migrateSpreadsheet() {
-  const spreadsheet = getOrCreateSpreadsheet();
+  const spreadsheet = getOrCreateSpreadsheet(TARGET_SPREADSHEET_ID);
   const sheet = spreadsheet.getSheetByName("Applications");
   
   // Get existing data
@@ -208,7 +231,7 @@ function migrateSpreadsheet() {
 function scanEmails(mode, spreadsheetId) {
   mode = mode === 'historical' ? 'historical' : 'recent';
   const startTime = getScanStartTime();
-  const spreadsheet = getOrCreateSpreadsheet(spreadsheetId);
+  const spreadsheet = getOrCreateSpreadsheet(spreadsheetId || TARGET_SPREADSHEET_ID);
   const sheet = spreadsheet.getSheetByName("Applications");
 
   // Get all existing data from the spreadsheet
@@ -273,7 +296,8 @@ function scanEmails(mode, spreadsheetId) {
   
   const scanWindow = getScanWindow(mode, new Date(startTime));
   const query = buildGmailSearchQuery(mode, scanWindow);
-  const threads = GmailApp.search(query, 0, getBatchSize());
+  const searchStart = getGmailSearchStart(mode, query);
+  const threads = GmailApp.search(query, searchStart, getBatchSize());
   metrics.threadsFound = threads.length;
   let updatesCount = 0;
   const pendingCellUpdates = [];
@@ -407,7 +431,20 @@ function scanEmails(mode, spreadsheetId) {
     }
   }
 
-  if (newRows.length > 0) sheet.getRange(sheet.getLastRow() + 1, 1, newRows.length, newRows[0].length).setValues(newRows);
+  Logger.log(
+    "About to write rows: spreadsheet=" + spreadsheet.getUrl() +
+    ", sheet=" + sheet.getName() +
+    ", currentRows=" + sheet.getLastRow() +
+    ", newRows=" + newRows.length +
+    ", newRowColumns=" + (newRows[0] ? newRows[0].length : 0) +
+    ", sheetColumns=" + sheet.getLastColumn()
+  );
+
+  if (newRows.length > 0) {
+    sheet.getRange(sheet.getLastRow() + 1, 1, newRows.length, newRows[0].length).setValues(newRows);
+    SpreadsheetApp.flush();
+    Logger.log("After write: rows=" + sheet.getLastRow());
+  }
   pendingCellUpdates.forEach(update => {
     if (update.threadId) sheet.getRange(update.row, threadIdIndex + 1).setValue(update.threadId);
     if (update.status) sheet.getRange(update.row, statusIndex + 1).setValue(update.status);
@@ -442,9 +479,11 @@ function scanEmails(mode, spreadsheetId) {
   const completedBatch = threads.length < getBatchSize() && !interrupted;
   if (completedBatch) {
     completeScanWindow(mode, scanWindow);
+  } else if (!interrupted) {
+    completeGmailSearchPage(mode, query, searchStart, threads.length);
   }
-  Logger.log('Scan summary: mode=' + mode + ', spreadsheet=' + spreadsheet.getUrl() + ', rows=' + sheet.getLastRow() + ', window=' + formatScanDate_(scanWindow.start) + '..' + formatScanDate_(scanWindow.end) + ', threads=' + metrics.threadsFound + ', processed=' + metrics.processed + ', added=' + metrics.added + ', updated=' + metrics.updated + ', skipped=' + metrics.skipped + ', parseFailures=' + metrics.parseFailures + ', moreWork=' + !completedBatch);
-  return { mode: mode, completed: completedBatch, interrupted: interrupted, threads: metrics.threadsFound, added: metrics.added, updated: metrics.updated, skipped: metrics.skipped, parseFailures: metrics.parseFailures, rows: sheet.getLastRow(), query: query };
+  Logger.log('Scan summary: mode=' + mode + ', spreadsheet=' + spreadsheet.getUrl() + ', rows=' + sheet.getLastRow() + ', window=' + formatScanDate_(scanWindow.start) + '..' + formatScanDate_(scanWindow.end) + ', searchStart=' + searchStart + ', nextSearchStart=' + (completedBatch ? 0 : searchStart + threads.length) + ', threads=' + metrics.threadsFound + ', processed=' + metrics.processed + ', added=' + metrics.added + ', updated=' + metrics.updated + ', skipped=' + metrics.skipped + ', parseFailures=' + metrics.parseFailures + ', moreWork=' + !completedBatch);
+  return { mode: mode, completed: completedBatch, interrupted: interrupted, threads: metrics.threadsFound, searchStart: searchStart, nextSearchStart: completedBatch ? 0 : searchStart + threads.length, added: metrics.added, updated: metrics.updated, skipped: metrics.skipped, parseFailures: metrics.parseFailures, rows: sheet.getLastRow(), query: query };
 }
 
 function importHistoricalEmails(spreadsheetId) {
@@ -458,9 +497,9 @@ function importHistoricalEmails(spreadsheetId) {
     totals.updated += result.updated;
     totals.skipped += result.skipped;
     totals.parseFailures += result.parseFailures;
-    if (!result.completed || isNearExecutionLimit(importStartTime)) break;
+    if (shouldStopHistoricalImport(result, importStartTime)) break;
   }
-  Logger.log('Historical import summary: windows=' + totals.windows + ', threads=' + totals.threads + ', added=' + totals.added + ', updated=' + totals.updated + ', skipped=' + totals.skipped + ', parseFailures=' + totals.parseFailures);
+  Logger.log('Historical import summary: windows=' + totals.windows + ', maxWindowsPerRun=' + SCAN_CONFIG.maxHistoricalWindowsPerRun + ', threads=' + totals.threads + ', added=' + totals.added + ', updated=' + totals.updated + ', skipped=' + totals.skipped + ', parseFailures=' + totals.parseFailures);
   SpreadsheetApp.getActive().toast('Historical import checked ' + totals.windows + ' windows. Added ' + totals.added + ', updated ' + totals.updated + '.');
 }
 
@@ -469,7 +508,7 @@ function importHistoricalEmails(spreadsheetId) {
  * to help maintain professional relationships
  */
 function createRejectionFollowupDrafts() {
-  const spreadsheet = getOrCreateSpreadsheet();
+  const spreadsheet = getOrCreateSpreadsheet(TARGET_SPREADSHEET_ID);
   const sheet = spreadsheet.getSheetByName("Applications");
   
   // Get all data from the spreadsheet
