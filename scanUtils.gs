@@ -97,12 +97,8 @@ function isSpecificLinkedInApplicationSubject_(subjectLower) {
     /^\s*your application (?:to|for) .+ at .+/i.test(subjectLower);
 }
 
-function isJobContextOtp_(combinedLower) {
-  return containsAny_(combinedLower, ['application', 'candidate', 'job', 'career', 'hiring team', 'smartrecruiters', 'workday', 'greenhouse']);
-}
-
 function buildGmailSearchQuery(mode, window) {
-  const signalGroup = '(subject:("thank you for applying" OR "thanks for applying" OR "thank you for your application" OR "thanks for your application" OR "your application was sent" OR "application submitted" OR "successfully applied" OR "your application to" OR "your application for" OR "application received" OR "we received your application" OR "confirmation of your application" OR "interview invitation" OR "schedule interview" OR "interview scheduling" OR "scheduling request" OR "interview request" OR "candidacy update" OR "application status" OR assessment OR "coding challenge" OR "job offer" OR "status update" OR "regarding your application" OR "thank you for your interest" OR "thank you in your interest" OR "update on your candidacy") OR body:("thank you for your interest" OR "thank you for applying" OR "thanks for applying" OR "thank you for your application" OR "thanks for your application" OR "received your application" OR "application has been received" OR "your application was sent" OR "application submitted" OR "successfully applied" OR "your application to" OR "your application for" OR "interview scheduling" OR "interview request" OR "scheduling request" OR "schedule your interview") OR from:(@talent OR @careers OR @jobs OR @hr OR @recruiting OR @hire OR jobs-noreply@linkedin.com OR candidates.workablemail.com OR @inbound.workablemail.com OR greenhouse.io OR greenhouse-mail.io OR lever.co OR myworkdayjobs.com OR myworkday.com OR workday.com OR icims.com OR smartrecruiters.com OR indeed.com OR successfactors.com))';
+  const signalGroup = '(subject:("thank you for applying" OR "thanks for applying" OR "thank you for your application" OR "thanks for your application" OR "your application was sent" OR "application submitted" OR "successfully applied" OR "your application to" OR "your application for" OR "application received" OR "we received your application" OR "confirmation of your application" OR "interview invitation" OR "schedule interview" OR "interview scheduling" OR "scheduling request" OR "interview request" OR "candidacy update" OR "application status" OR assessment OR "coding challenge" OR "job offer" OR "status update" OR "regarding your application" OR "thank you for your interest" OR "thank you in your interest" OR "update on your candidacy" OR "you have been referred" OR "referred to a job" OR "immediate hiring" OR "contract opportunity" OR "came across your profile" OR "send your resume" OR "forward your resume" OR "profile to our client" OR "presenting your profile") OR body:("thank you for your interest" OR "thank you for applying" OR "thanks for applying" OR "thank you for your application" OR "thanks for your application" OR "received your application" OR "application has been received" OR "your application was sent" OR "application submitted" OR "successfully applied" OR "your application to" OR "your application for" OR "interview scheduling" OR "interview request" OR "scheduling request" OR "schedule your interview" OR "you have been referred" OR "referred to a job" OR "immediate hiring" OR "contract opportunity" OR "came across your profile" OR "send your resume" OR "forward your resume" OR "profile to our client" OR "presenting your profile") OR from:(@talent OR @careers OR @jobs OR @hr OR @recruiting OR @hire OR jobs-noreply@linkedin.com OR inmail-hit-reply@linkedin.com OR hit-reply@linkedin.com OR messaging-digest-noreply@linkedin.com OR candidates.workablemail.com OR @inbound.workablemail.com OR greenhouse.io OR greenhouse-mail.io OR lever.co OR myworkdayjobs.com OR myworkday.com OR workday.com OR icims.com OR smartrecruiters.com OR indeed.com OR successfactors.com))';
   const exclusions = '-from:jobs-listings@linkedin.com -from:@glassdoor.com -subject:"password reset" -subject:"weekly application update" -subject:digest';
   return signalGroup + ' ' + exclusions + ' ' + buildDateWindowFilter(window);
 }
@@ -177,6 +173,18 @@ function classifyRegexDecision(subject, from, bodyOrSnippet) {
   const fromLower = String(from || '').toLowerCase();
   const domain = senderDomain_(from);
   const combined = lowerSubject + ' ' + lowerBody + ' ' + fromLower;
+  const hasSpecificLinkedInApplicationSubject = isSpecificLinkedInApplicationSubject_(lowerSubject);
+  const hasReferralSignal = containsAny_(combined, ['you have been referred', 'referred to a job']);
+  const hasStrongNonOtpJobProcessSignal = containsAny_(combined, [
+    'interview', 'assessment', 'application submitted', 'application received',
+    'your application was sent', 'thank you for applying', 'referred to a job'
+  ]);
+  const hasOtpSignal = containsAny_(combined, ['security code', 'verification code', 'one-time passcode', 'one-time-passcode', 'one-time password', 'one-time code']);
+  const isSecurityAccountNoise = containsAny_(combined, ['oauth application', 'third-party oauth', 'third-party github application', 'security alert', 'authorized to access your github account', 'apps connected to your account']);
+  const isGovernmentNonJobApplication = containsAny_(combined, ['social insurance number', ' sin ', ' nas ', 'passport', 'reisepass', 'consulate', 'income support']);
+  const isEducationCertificationNoise = containsAny_(combined, ['pmp application', 'certification application', 'course brochure', 'program advisor', 'graduate programs', 'admissions', 'graduation application']);
+  const isConsumerAccountNoise = containsAny_(combined, ['billing statement', 'statement is now available', 'tax slip', 'insurance quote', 'road test', 'triangle rewards', 'bonus ct money']);
+  const isFinanceHousingStudentApplicationNoise = containsAny_(combined, ['financial aid', 'loan application', 'credit card application', 'housing application', 'student portal', 'student application']);
   const isNewsletterNoise = domain.indexOf('substack') !== -1 ||
     domain.indexOf('beehiiv') !== -1 ||
     domain.indexOf('medium.com') !== -1 ||
@@ -198,20 +206,20 @@ function classifyRegexDecision(subject, from, bodyOrSnippet) {
   const isRecruitmentDomain = recruitmentDomains.some(d => domain === d || domain.endsWith('.' + d));
 
   if (lowerSubject.indexOf('your application was sent to') !== -1) return { skip: false, reason: 'linkedin_application_sent', confidence: 'high' };
-  if (/^\s*your application (?:to|for) .+ at .+/i.test(lowerSubject)) return { skip: false, reason: 'specific_application_update', confidence: 'high' };
-  if (containsAny_(combined, ['you have been referred', 'referred to a job'])) return { skip: false, reason: 'referral', confidence: 'high' };
+  if (hasSpecificLinkedInApplicationSubject) return { skip: false, reason: 'specific_application_update', confidence: 'high' };
+  if (isFinanceHousingStudentApplicationNoise) return { skip: true, reason: 'finance_housing_student_application_noise', confidence: 'high' };
+  if (hasReferralSignal) return { skip: false, reason: 'referral', confidence: 'high' };
+  if (isSecurityAccountNoise) return { skip: true, reason: 'security_account_noise', confidence: 'high' };
+  if (isGovernmentNonJobApplication) return { skip: true, reason: 'government_non_job_application', confidence: 'high' };
+  if (isEducationCertificationNoise) return { skip: true, reason: 'education_certification_noise', confidence: 'high' };
+  if (isConsumerAccountNoise) return { skip: true, reason: 'consumer_account_noise', confidence: 'high' };
+  if (hasOtpSignal && !hasStrongNonOtpJobProcessSignal) return { skip: true, reason: 'otp_noise', confidence: 'high' };
   if (isNewsletterNoise) return { skip: true, reason: 'newsletter_noise', confidence: 'high' };
   if (containsAny_(combined, ['not moving forward', 'pursue other candidates', 'position has been filled', 'regret to inform', 'no longer being considered'])) return { skip: false, reason: 'rejection_signal', confidence: 'high' };
   if (containsAny_(combined, ['interview scheduling', 'interview request', 'schedule your interview', 'invitation to interview'])) return { skip: false, reason: 'interview_signal', confidence: 'high' };
   if (containsAny_(combined, ['thank you for applying', 'we received your application', 'application received', 'successfully applied', 'regarding your application', 'update on your application'])) return { skip: false, reason: 'application_transactional_signal', confidence: 'high' };
   if (containsAny_(combined, ['immediate hiring', 'contract opportunity', 'came across your profile', 'saw your profile', 'send your resume', 'forward your resume', 'presenting your profile', 'profile to our client'])) return { skip: false, reason: 'direct_recruiter_outreach', confidence: 'high' };
   if ((fromLower.indexOf('inmail-hit-reply@linkedin.com') !== -1 || fromLower.indexOf('hit-reply@linkedin.com') !== -1 || fromLower.indexOf('messaging-digest-noreply@linkedin.com') !== -1) && containsAny_(combined, ['opportunity', 'recruiter', 'role', 'position', 'resume', 'client', 'hiring'])) return { skip: false, reason: 'linkedin_recruiter_message', confidence: 'medium' };
-
-  if (containsAny_(combined, ['oauth application', 'third-party oauth', 'third-party github application', 'security alert', 'authorized to access your github account', 'apps connected to your account'])) return { skip: true, reason: 'security_account_noise', confidence: 'high' };
-  if (containsAny_(combined, ['social insurance number', ' nas ', 'passport', 'reisepass', 'consulate', 'income support'])) return { skip: true, reason: 'government_non_job_application', confidence: 'high' };
-  if (containsAny_(combined, ['pmp application', 'certification application', 'course brochure', 'program advisor', 'graduate programs', 'admissions', 'graduation application'])) return { skip: true, reason: 'education_certification_noise', confidence: 'high' };
-  if (containsAny_(combined, ['billing statement', 'statement is now available', 'tax slip', 'insurance quote', 'road test', 'triangle rewards', 'bonus ct money'])) return { skip: true, reason: 'consumer_account_noise', confidence: 'high' };
-  if (containsAny_(lowerSubject, ['security code', 'verification code', 'one-time passcode', 'one-time-passcode', 'one-time']) && !isJobContextOtp_(combined)) return { skip: true, reason: 'otp_noise', confidence: 'high' };
 
   if (fromLower.indexOf('jobs-listings') !== -1 || fromLower.indexOf('jobalerts-noreply') !== -1 || (fromLower.indexOf('jobs-noreply') !== -1 && !isSpecificLinkedInApplicationSubject_(lowerSubject))) {
     if (containsAny_(combined, ['weekly application update', 'new application updates', 'job alert', 'jobs you may be interested', 'jobs similar to', 'apply now', 'viewed by', 'premium', 'upgrade', 'digest'])) return { skip: true, reason: 'job_board_digest_noise', confidence: 'high' };

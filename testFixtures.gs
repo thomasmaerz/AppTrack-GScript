@@ -100,6 +100,42 @@ const TestFixtures = {
     from: 'SmartRecruiters <noreply@smartrecruiters.com>',
     body: 'Your one-time passcode is 123456. This code expires soon.',
     skip: true
+  },
+  loanApplicationNoise: {
+    subject: 'Your loan application was received',
+    from: 'Bank <noreply@bank.example.com>',
+    body: 'Your loan application was received and is being reviewed.',
+    skip: true
+  },
+  creditCardApplicationNoise: {
+    subject: 'Credit card application received',
+    from: 'Bank <cards@bank.example.com>',
+    body: 'We received your credit card application.',
+    skip: true
+  },
+  housingApplicationNoise: {
+    subject: 'Housing application received',
+    from: 'Housing Portal <noreply@housing.example.com>',
+    body: 'Your housing application has been received.',
+    skip: true
+  },
+  studentPortalApplicationNoise: {
+    subject: 'Application received in your student portal',
+    from: 'University <admissions@example.edu>',
+    body: 'Your student portal application was received by admissions.',
+    skip: true
+  },
+  workdayCandidateAccountOtpNoise: {
+    subject: 'Your Workday candidate account one-time passcode',
+    from: 'Workday <noreply@myworkday.com>',
+    body: 'Your one-time passcode for your candidate account application is 123456.',
+    skip: true
+  },
+  smartRecruitersCandidateAccountOtpNoise: {
+    subject: 'SmartRecruiters candidate account security code',
+    from: 'SmartRecruiters <noreply@smartrecruiters.com>',
+    body: 'Use this security code to access your candidate application account.',
+    skip: true
   }
 };
 
@@ -123,6 +159,12 @@ function runTrackerTests() {
   assertTrackerEqual(shouldSkipMessage(f.recruiterFollowUp.subject, f.recruiterFollowUp.from, f.recruiterFollowUp.body), false, 'Recruiter follow-up retained');
   assertTrackerEqual(shouldSkipMessage(f.mastercardReferral.subject, f.mastercardReferral.from, f.mastercardReferral.body), false, 'Mastercard referral retained');
   assertTrackerEqual(shouldSkipMessage(f.smartRecruitersOtpNoise.subject, f.smartRecruitersOtpNoise.from, f.smartRecruitersOtpNoise.body), true, 'SmartRecruiters OTP skipped');
+  assertTrackerEqual(shouldSkipMessage(f.loanApplicationNoise.subject, f.loanApplicationNoise.from, f.loanApplicationNoise.body), true, 'Loan application noise skipped');
+  assertTrackerEqual(shouldSkipMessage(f.creditCardApplicationNoise.subject, f.creditCardApplicationNoise.from, f.creditCardApplicationNoise.body), true, 'Credit card application noise skipped');
+  assertTrackerEqual(shouldSkipMessage(f.housingApplicationNoise.subject, f.housingApplicationNoise.from, f.housingApplicationNoise.body), true, 'Housing application noise skipped');
+  assertTrackerEqual(shouldSkipMessage(f.studentPortalApplicationNoise.subject, f.studentPortalApplicationNoise.from, f.studentPortalApplicationNoise.body), true, 'Student portal application noise skipped');
+  assertTrackerEqual(shouldSkipMessage(f.workdayCandidateAccountOtpNoise.subject, f.workdayCandidateAccountOtpNoise.from, f.workdayCandidateAccountOtpNoise.body), true, 'Workday candidate account OTP skipped');
+  assertTrackerEqual(shouldSkipMessage(f.smartRecruitersCandidateAccountOtpNoise.subject, f.smartRecruitersCandidateAccountOtpNoise.from, f.smartRecruitersCandidateAccountOtpNoise.body), true, 'SmartRecruiters candidate account OTP skipped');
   assertTrackerEqual(StatusUtils.determineStatus(f.immediateHiringRecruiter.subject, f.immediateHiringRecruiter.body, ''), f.immediateHiringRecruiter.status, 'Recruiter outreach status');
   assertTrackerEqual(StatusUtils.determineStatus(f.recruiterFollowUp.subject, f.recruiterFollowUp.body, ''), f.recruiterFollowUp.status, 'Recruiter follow-up status');
   assertTrackerEqual(StatusUtils.determineStatus(f.mastercardReferral.subject, f.mastercardReferral.body, ''), f.mastercardReferral.status, 'Referral status');
@@ -156,6 +198,9 @@ function runTrackerTests() {
   assertTrackerEqual(historicalQuery.indexOf('"your application was sent"') !== -1, true, 'query includes LinkedIn sent confirmation phrase');
   assertTrackerEqual(historicalQuery.indexOf('"application submitted"') !== -1, true, 'query includes submitted phrase');
   assertTrackerEqual(historicalQuery.indexOf('"successfully applied"') !== -1, true, 'query includes successfully applied phrase');
+  assertTrackerEqual(historicalQuery.indexOf('"immediate hiring"') !== -1, true, 'query includes recruiter immediate hiring phrase');
+  assertTrackerEqual(historicalQuery.indexOf('"referred to a job"') !== -1, true, 'query includes referral phrase');
+  assertTrackerEqual(historicalQuery.indexOf('inmail-hit-reply@linkedin.com') !== -1, true, 'query includes LinkedIn InMail sender');
   assertTrackerEqual(historicalQuery.indexOf('greenhouse.io') !== -1, true, 'query includes Greenhouse ATS domain');
   assertTrackerEqual(buildBroadGmailSearchQuery(historicalWindow).indexOf('"your application"') !== -1, true, 'broad query includes generic application phrase');
   assertTrackerEqual(getGmailSearchStart('recent', historicalQuery), 0, 'recent scans always start at first Gmail page');
