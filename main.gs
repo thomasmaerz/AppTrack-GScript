@@ -1134,7 +1134,8 @@ function runGeminiBroadGapClassification(spreadsheet) {
         'REFERRAL': 'Referral',
         'APPLICATION_UPDATE': 'Status Update',
         'CANDIDATE_ACCOUNT_DRAFT': 'Status Update',
-        'NOISE': 'Noise'
+        'NOISE': 'Noise',
+        'RESPONSE': 'Response'
       };
       geminiClass = classMap[geminiRes.cat] || 'Noise';
     }
