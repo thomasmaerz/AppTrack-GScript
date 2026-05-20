@@ -45,8 +45,43 @@ const CompanyUtils = {
    * @return {string} Extracted company name or "Unknown Company"
    */
   extractCompany: function(subject, body, from, htmlBody) {
+    const originalSubject = String(subject || '');
+    const originalBody = String(body || '');
     subject = normalizeParserText_(subject);
     body = normalizeParserText_(body);
+    const lineAwareText = (originalSubject + '\n' + originalBody)
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/\r\n?/g, '\n')
+      .replace(/[\t ]+/g, ' ')
+      .trim();
+    const linkedInSentLineMatch = lineAwareText.match(/(?:^|\n)\s*your application was sent to\s+([^\n.]+)/i);
+    if (linkedInSentLineMatch && linkedInSentLineMatch[1]) {
+      const candidate = linkedInSentLineMatch[1].replace(/\b(View application|Job ID|Reference|Unsubscribe).*$/i, '').trim();
+      if (candidate && candidate.length <= 80 && !this.isLikelyNotCompany(candidate)) return candidate;
+    }
+    const combinedText = normalizeParserText_(subject + ' ' + body);
+    const deterministicCompanyPatterns = [
+      /your application was sent to\s+([^\n.]+)/i,
+      /your application (?:to|for)\s+.+?\s+at\s+([^\n.]+)/i,
+      /thank you for applying to\s+([^\n.]+)/i,
+      /for applying to\s+([^\n.]+)/i,
+      /you have been referred to a job at\s+([^\n.]+)/i
+    ];
+    for (const pattern of deterministicCompanyPatterns) {
+      const deterministicMatch = combinedText.match(pattern);
+      if (deterministicMatch && deterministicMatch[1]) {
+        const candidate = deterministicMatch[1]
+          .replace(/\b(View application|Job ID|Reference|Unsubscribe|has an update|The hiring team).*$/i, '')
+          .replace(/\bYour application was sent to\b.*$/i, '')
+          .replace(/\bYour application (?:to|for)\b.*$/i, '')
+          .replace(/\bYou have been referred to a job at\b.*$/i, '')
+          .replace(/\bThank you for applying to\b.*$/i, '')
+          .replace(/\bfor applying to\b.*$/i, '')
+          .trim();
+        if (candidate && candidate.length <= 80 && !this.isLikelyNotCompany(candidate)) return candidate;
+      }
+    }
     // Method 1: Look for patterns in subject
     let match;
     const subjectPatterns = [
@@ -289,6 +324,23 @@ const JobUtils = {
       // Remove excessive whitespace
       body = body.replace(/\s+/g, ' ').trim();
     }
+    const combinedText = normalizeParserText_(subject + ' ' + body);
+    const deterministicTitlePatterns = [
+      /your application (?:to|for)\s+(.+?)\s+at\s+[^\n.]+/i,
+      /position of\s+(.+?)(?:\s+with|\s+at|[.\n]|$)/i,
+      /role of\s+(.+?)(?:\s+with|\s+at|[.\n]|$)/i,
+      /job title:\s*(.+?)(?:[.\n]|$)/i,
+      /for the\s+(.+?)\s+(?:position|role)/i,
+      /immediate hiring\s*-\s*(.+?)(?:[.\n]|$)/i,
+      /referred to a job at\s+[^.]+\.\s*(.+?)\s+is now open/i
+    ];
+    for (const pattern of deterministicTitlePatterns) {
+      const deterministicMatch = combinedText.match(pattern);
+      if (deterministicMatch && deterministicMatch[1]) {
+        const candidate = JobUtils.cleanJobTitle(deterministicMatch[1]);
+        if (this.isAcceptableTitleCandidate(candidate)) return candidate;
+      }
+    }
     
     // Similarly preprocess HTML content if it exists
     if (htmlBody) {
@@ -446,6 +498,12 @@ cleanJobTitle: function(title) {
   // Remove "and your/are ___"
   cleaned = cleaned
     .replace(/\s+and\s+(:?your|are|we|we're)\s+[A-Za-z0-9\s&(),.'-]+$/i, '')
+    .trim();
+
+  cleaned = cleaned
+    .replace(/\b(View application|Job ID|Reference|Apply now|Unsubscribe|Privacy Policy).*$/i, '')
+    .replace(/https?:\/\/\S+/gi, '')
+    .replace(/\b(?:Hi|Hello|Dear)\s+[A-Za-z]+.*$/i, '')
     .trim();
 
   // Remove excessive spaces
