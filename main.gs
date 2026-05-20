@@ -31,7 +31,10 @@ function onOpen() {
     .addItem('Compare Gmail Query Counts', 'compareGmailQueryCountsForTargetSpreadsheet')
     .addItem('Run Diagnostic Mailbox Audit', 'runDiagnosticMailboxAudit')
     .addItem('Run Broad Search Gap Audit', 'runBroadSearchGapAudit')
+    .addSeparator()
     .addItem('Run Gemini Broad Gap Audit', 'runGeminiBroadGapAudit')
+    .addItem('Clear Broad Search Cache DB', 'clearBroadSearchDB')
+    .addSeparator()
     .addItem('Run Tracker Tests', 'runTrackerTests')
     .addItem('Set up daily scanning', 'setupTriggers')
     .addItem('Refresh Visualizations', 'refreshVisualizations')
@@ -910,62 +913,149 @@ function runBroadSearchGapAudit() {
 }
 
 function runGeminiBroadGapAudit() {
+  const startTime = Date.now();
+  const maxRuntimeMs = 5 * 60 * 1000; // Safe timeout threshold (5 mins)
+  const stopBufferMs = 30 * 1000; // 30 second buffer
+  
+  const spreadsheet = getOrCreateSpreadsheet();
+  const scriptProperties = PropertiesService.getScriptProperties();
+  
+  // Check if BroadSearchDB exists and has cached emails
+  let gapDbSheet = spreadsheet.getSheetByName("BroadSearchDB");
+  const extractionStartStr = scriptProperties.getProperty('gap_extraction_start');
+  const isInProgress = extractionStartStr !== null;
+  
+  // If cache DB exists and we are not in progress, skip Stage 1 extraction
+  if (gapDbSheet && gapDbSheet.getLastRow() > 1 && !isInProgress) {
+    Logger.log('BroadSearchDB cache found. Skipping email extraction phase.');
+    runGeminiBroadGapClassification(spreadsheet);
+    return;
+  }
+  
+  // Initialize BroadSearchDB sheet if it doesn't exist
+  if (!gapDbSheet) {
+    gapDbSheet = spreadsheet.insertSheet("BroadSearchDB");
+    const headers = ["Thread ID", "Date", "From", "Subject", "Snippet"];
+    gapDbSheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    gapDbSheet.setFrozenRows(1);
+    gapDbSheet.autoResizeColumns(1, headers.length);
+  }
+  
+  Logger.log('Starting resilient 2-stage Gemini LLM Broad Search Gap Audit (Extraction Phase)...');
+  
+  let extractionStart = isInProgress ? Number(extractionStartStr) : 0;
+  scriptProperties.setProperty('gap_extraction_start', String(extractionStart));
+  
   const dateWindow = 'after:2025/06/15';
-  const broadQuery = '(application OR applied OR interview OR recruiter OR careers OR hiring OR "for applying" OR "application submitted" OR "your application") ' + dateWindow;
-  
-  Logger.log('Starting Uncapped Gemini LLM Broad Search Gap Audit (since 2025/06/15)...');
-  
-  // 1. Fetch ALL broad query threads (no arbitrary cap)
-  const threads = [];
-  let page = 0;
-  const pageSize = 500; // Boost page size for speed
+  // Optimized broad search query to filter out massive news & aggregator alerts at Gmail search level
+  const broadQuery = '(application OR applied OR interview OR recruiter OR careers OR hiring OR "for applying" OR "application submitted" OR "your application") ' +
+                     '-from:jobs-listings@linkedin.com -from:@glassdoor.com -from:substack -from:beehiiv -from:medium.com -from:ctfs.com ' +
+                     dateWindow;
+                     
   while (true) {
-    let threadsPage = GmailApp.search(broadQuery, page * pageSize, pageSize);
-    if (!threadsPage || threadsPage.length === 0) break;
-    threadsPage.forEach(t => threads.push(t));
-    if (threadsPage.length < pageSize) break;
-    page++;
-  }
-  
-  Logger.log(`Found ${threads.length} broad threads to audit.`);
-  
-  // Batch fetch all message arrays in a single network round-trip!
-  Logger.log('Batch fetching message lists for all threads...');
-  // Batch fetch all message arrays in chunks of at most 500 threads to avoid Google API limit!
-  Logger.log('Batch fetching message lists for all threads in chunks of 500...');
-  let messages2D = [];
-  const chunkLimit = 500;
-  for (let i = 0; i < threads.length; i += chunkLimit) {
-    const chunk = threads.slice(i, i + chunkLimit);
-    const chunkMessages = GmailApp.getMessagesForThreads(chunk);
-    messages2D = messages2D.concat(chunkMessages);
-  }
-  
-  // 2. Map thread metadata & extract regex decisions
-  const threadLogs = [];
-  const promptLogs = []; // Ultra-compressed input schema for Gemini
-  const idxMap = new Map(); // "001" -> threadId
-  
-  for (let i = 0; i < threads.length; i++) {
-    const thread = threads[i];
-    const messages = messages2D[i];
-    if (!messages || messages.length === 0) continue;
-    const firstMsg = messages[0];
-    const subject = firstMsg.getSubject();
-    const from = firstMsg.getFrom();
-    const body = firstMsg.getPlainBody() || '';
-    const snippet = body.substring(0, 350).replace(/\s+/g, ' ').trim();
+    // Check runtime budget
+    if (Date.now() - startTime >= maxRuntimeMs - stopBufferMs) {
+      Logger.log(`Nearing Apps Script execution timeout limit. Paused extraction at start index: ${extractionStart}. Scheduling background trigger...`);
+      
+      deleteGapAuditTriggers();
+      
+      ScriptApp.newTrigger('resumeGeminiBroadGapAudit')
+        .timeBased()
+        .after(60000) // Trigger in 1 minute
+        .create();
+        
+      try {
+        SpreadsheetApp.getActive().toast(`Extraction paused at index ${extractionStart} to prevent timeout. Resuming automatically in background in 1 minute...`);
+      } catch (e) {
+        Logger.log("UI Toast skipped: " + e.toString());
+      }
+      return;
+    }
     
-    // Evaluate Regex classification (PASS vs SKIP) using snippet instead of full body
+    Logger.log(`Searching Gmail for broad threads starting from index ${extractionStart}...`);
+    const threadsChunk = GmailApp.search(broadQuery, extractionStart, 250); // Batches of 250 threads
+    
+    if (!threadsChunk || threadsChunk.length === 0) {
+      Logger.log('Gmail search yielded no more matching threads. Extraction complete!');
+      break;
+    }
+    
+    Logger.log(`Fetched ${threadsChunk.length} threads in current batch. Extracting snippets in bulk...`);
+    const messages2D = GmailApp.getMessagesForThreads(threadsChunk);
+    
+    const newRows = [];
+    for (let i = 0; i < threadsChunk.length; i++) {
+      const thread = threadsChunk[i];
+      const messages = messages2D[i];
+      if (!messages || messages.length === 0) continue;
+      const firstMsg = messages[0];
+      const body = firstMsg.getPlainBody() || '';
+      const snippet = body.substring(0, 350).replace(/\s+/g, ' ').trim();
+      
+      newRows.push([
+        thread.getId(),
+        firstMsg.getDate().toISOString(),
+        firstMsg.getFrom(),
+        firstMsg.getSubject(),
+        snippet
+      ]);
+    }
+    
+    if (newRows.length > 0) {
+      const lastRow = gapDbSheet.getLastRow();
+      gapDbSheet.getRange(lastRow + 1, 1, newRows.length, newRows[0].length).setValues(newRows);
+      Logger.log(`Successfully cached ${newRows.length} threads into BroadSearchDB.`);
+    }
+    
+    extractionStart += threadsChunk.length;
+    scriptProperties.setProperty('gap_extraction_start', String(extractionStart));
+    
+    if (threadsChunk.length < 250) {
+      Logger.log('No more records remaining. Extraction complete!');
+      break;
+    }
+  }
+  
+  // Clean up stage progress metrics and triggers
+  scriptProperties.deleteProperty('gap_extraction_start');
+  deleteGapAuditTriggers();
+  
+  Logger.log('Transitioning to Stage 2: Gemini LLM Classification...');
+  runGeminiBroadGapClassification(spreadsheet);
+}
+
+function resumeGeminiBroadGapAudit() {
+  Logger.log("Resuming Gemini Broad Gap Audit from trigger execution...");
+  runGeminiBroadGapAudit();
+}
+
+function runGeminiBroadGapClassification(spreadsheet) {
+  const gapDbSheet = spreadsheet.getSheetByName("BroadSearchDB");
+  if (!gapDbSheet || gapDbSheet.getLastRow() <= 1) {
+    Logger.log("No data found in BroadSearchDB cache for classification.");
+    return;
+  }
+  
+  const cachedData = gapDbSheet.getRange(2, 1, gapDbSheet.getLastRow() - 1, 5).getValues();
+  Logger.log(`Loaded ${cachedData.length} records from local cache. Beginning Gemini audit...`);
+  
+  const threadLogs = [];
+  const promptLogs = [];
+  const idxMap = new Map();
+  
+  for (let i = 0; i < cachedData.length; i++) {
+    const [threadId, date, from, subject, snippet] = cachedData[i];
+    
+    // Check regex classification rules
     const regexSkip = shouldSkipMessage(subject, from, snippet);
     const regexDecision = regexSkip ? 'SKIP' : 'PASS';
     
     const idx = String(i + 1).padStart(3, '0');
-    idxMap.set(idx, thread.getId());
+    idxMap.set(idx, threadId);
     
     threadLogs.push({
-      threadId: thread.getId(),
-      date: firstMsg.getDate().toISOString(),
+      threadId: threadId,
+      date: date,
       from: from,
       subject: subject,
       snippet: snippet,
@@ -979,9 +1069,8 @@ function runGeminiBroadGapAudit() {
       sn: snippet
     });
   }
-
-  // 3. Batch threads and call Gemini
-  const geminiMap = new Map(); // threadId -> classification result
+  
+  const geminiMap = new Map();
   for (let i = 0; i < promptLogs.length; i += GEMINI_CONFIG.batchSize) {
     const batch = promptLogs.slice(i, i + GEMINI_CONFIG.batchSize);
     Logger.log(`Sending batch ${Math.floor(i / GEMINI_CONFIG.batchSize) + 1} to Gemini (${batch.length} threads)...`);
@@ -997,20 +1086,19 @@ function runGeminiBroadGapAudit() {
       Logger.log("Error classifying batch: " + e.toString());
     }
     
-    // Pacing delay to stabilize connection and respect limits
     if (i + GEMINI_CONFIG.batchSize < promptLogs.length) {
       Logger.log("Applying pacing delay (1000ms) before next batch...");
       Utilities.sleep(1000);
     }
   }
-
-  // 4. Align regex and Gemini decisions into audit rows
+  
+  // Formulate output columns
   const auditData = [[
     "Thread ID", "Date", "From", "Subject", "Regex Decision", 
     "Gemini Decision", "Gap Status", "Gemini Class", 
     "Gemini Company", "Gemini Title", "Gemini Reasoning", "Snippet"
   ]];
-
+  
   for (const logItem of threadLogs) {
     const geminiRes = geminiMap.get(logItem.threadId);
     
@@ -1035,15 +1123,14 @@ function runGeminiBroadGapAudit() {
       };
       geminiClass = classMap[geminiRes.cat] || 'Noise';
     }
-
-    // Determine Gap Status
+    
     let gapStatus = 'MATCH';
     if (logItem.regexDecision === 'SKIP' && geminiDecision === 'PASS') {
       gapStatus = 'FALSE_SKIP';
     } else if (logItem.regexDecision === 'PASS' && geminiDecision === 'SKIP') {
       gapStatus = 'FALSE_PASS';
     }
-
+    
     auditData.push([
       logItem.threadId,
       logItem.date,
@@ -1059,9 +1146,8 @@ function runGeminiBroadGapAudit() {
       logItem.snippet
     ]);
   }
-
-  // 5. Output comparative data to tab "BroadGapLLM"
-  const spreadsheet = getOrCreateSpreadsheet();
+  
+  // Format target comparison tab
   let gapSheet = spreadsheet.getSheetByName("BroadGapLLM");
   if (gapSheet) {
     gapSheet.clear();
@@ -1070,13 +1156,53 @@ function runGeminiBroadGapAudit() {
   }
   
   gapSheet.getRange(1, 1, auditData.length, auditData[0].length).setValues(auditData);
-  
-  // Format tab nicely (auto-resize and hide Thread ID column)
   gapSheet.autoResizeColumns(1, auditData[0].length);
   gapSheet.hideColumn(gapSheet.getRange(1, 1, 1, 1));
   
-  // Apply a clean alternate row color schema and formatting
   SpreadsheetUtils.formatGapLLMSheet(gapSheet, auditData.length);
   
-  SpreadsheetApp.getActive().toast(`Gemini Broad Search Gap Audit complete! Open the "BroadGapLLM" sheet tab to inspect results!`);
+  try {
+    SpreadsheetApp.getActive().toast(`Gemini Broad Search Gap Audit complete! Open the "BroadGapLLM" sheet tab to inspect results!`);
+  } catch (e) {
+    Logger.log("UI Toast skipped: " + e.toString());
+  }
+}
+
+function deleteGapAuditTriggers() {
+  const triggers = ScriptApp.getProjectTriggers();
+  triggers.forEach(trigger => {
+    const handler = trigger.getHandlerFunction();
+    if (handler === 'resumeGeminiBroadGapAudit') {
+      ScriptApp.deleteTrigger(trigger);
+      Logger.log(`Successfully deleted orphaned background trigger: ${handler}`);
+    }
+  });
+}
+
+function clearBroadSearchDB() {
+  const spreadsheet = getOrCreateSpreadsheet();
+  const sheet = spreadsheet.getSheetByName("BroadSearchDB");
+  
+  // Clear Script Properties
+  const scriptProperties = PropertiesService.getScriptProperties();
+  scriptProperties.deleteProperty('gap_extraction_start');
+  
+  // Clear triggers
+  deleteGapAuditTriggers();
+  
+  if (sheet) {
+    spreadsheet.deleteSheet(sheet);
+    try {
+      SpreadsheetApp.getActive().toast("BroadSearchDB cache and extraction state cleared successfully!");
+    } catch (e) {
+      Logger.log("UI Toast skipped: " + e.toString());
+    }
+    Logger.log("Successfully deleted BroadSearchDB sheet and reset properties.");
+  } else {
+    try {
+      SpreadsheetApp.getActive().toast("No BroadSearchDB cache found to clear.");
+    } catch (e) {
+      Logger.log("UI Toast skipped: " + e.toString());
+    }
+  }
 }
