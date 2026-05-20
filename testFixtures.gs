@@ -43,6 +43,63 @@ const TestFixtures = {
     from: 'Ladders <jobs@my.theladders.com>',
     body: 'Improve your interview skills and start applying to premium jobs. Get hired today.',
     skip: true
+  },
+  linkedInSpecificUpdate: {
+    subject: 'Your application to Project Manager at TEEMA',
+    from: 'LinkedIn <jobs-noreply@linkedin.com>',
+    body: 'Your application to Project Manager at TEEMA has an update. The hiring team reviewed your application.',
+    skip: false,
+    status: 'Status Update',
+    company: 'TEEMA',
+    title: 'Project Manager'
+  },
+  githubOauthNoise: {
+    subject: 'A third-party OAuth application has been added to your account',
+    from: 'GitHub <noreply@github.com>',
+    body: 'A third-party OAuth application was recently authorized to access your GitHub account.',
+    skip: true
+  },
+  sinApplicationNoise: {
+    subject: 'Your Social Insurance Number application was received',
+    from: 'Service Canada <noreply@canada.ca>',
+    body: 'We received your Social Insurance Number application.',
+    skip: true
+  },
+  pmpApplicationNoise: {
+    subject: 'Your PMP application has been approved',
+    from: 'PMI <customercare@pmi.org>',
+    body: 'Your PMP certification application has been approved.',
+    skip: true
+  },
+  immediateHiringRecruiter: {
+    subject: 'Immediate Hiring - Senior IT Systems Administrator',
+    from: 'Adithya Naidu <adithya@recruiting.example.com>',
+    body: 'Hi Thomas, I came across your profile and have an immediate hiring opportunity for a Senior IT Systems Administrator contract role. Please send your resume.',
+    skip: false,
+    status: 'Recruiter Outreach',
+    title: 'Senior IT Systems Administrator'
+  },
+  recruiterFollowUp: {
+    subject: 'Message replied: Immediate Hiring - Senior IT Systems Administrator',
+    from: 'Adithya Naidu <adithya@recruiting.example.com>',
+    body: 'Following up on the Senior IT Systems Administrator role. Please forward your resume if interested.',
+    skip: false,
+    status: 'Recruiter Follow-up'
+  },
+  mastercardReferral: {
+    subject: 'You have been referred to a job at Mastercard',
+    from: 'Mastercard Careers <careers@mastercard.com>',
+    body: 'You have been referred to a job at Mastercard. Senior Technical Program Manager is now open for your application.',
+    skip: false,
+    status: 'Referral',
+    company: 'Mastercard',
+    title: 'Senior Technical Program Manager'
+  },
+  smartRecruitersOtpNoise: {
+    subject: 'Your SmartRecruiters one-time passcode',
+    from: 'SmartRecruiters <noreply@smartrecruiters.com>',
+    body: 'Your one-time passcode is 123456. This code expires soon.',
+    skip: true
   }
 };
 
@@ -58,6 +115,24 @@ function runTrackerTests() {
   assertTrackerEqual(shouldSkipMessage(f.shiftTechnologyInterview.subject, f.shiftTechnologyInterview.from, f.shiftTechnologyInterview.body), false, 'Shift Technology interview retained');
   assertTrackerEqual(shouldSkipMessage(f.indeedMarketing.subject, f.indeedMarketing.from, f.indeedMarketing.body), true, 'Indeed marketing skipped');
   assertTrackerEqual(shouldSkipMessage(f.laddersMarketing.subject, f.laddersMarketing.from, f.laddersMarketing.body), true, 'Ladders marketing skipped');
+  assertTrackerEqual(shouldSkipMessage(f.linkedInSpecificUpdate.subject, f.linkedInSpecificUpdate.from, f.linkedInSpecificUpdate.body), false, 'LinkedIn specific update retained');
+  assertTrackerEqual(shouldSkipMessage(f.githubOauthNoise.subject, f.githubOauthNoise.from, f.githubOauthNoise.body), true, 'GitHub OAuth noise skipped');
+  assertTrackerEqual(shouldSkipMessage(f.sinApplicationNoise.subject, f.sinApplicationNoise.from, f.sinApplicationNoise.body), true, 'SIN application noise skipped');
+  assertTrackerEqual(shouldSkipMessage(f.pmpApplicationNoise.subject, f.pmpApplicationNoise.from, f.pmpApplicationNoise.body), true, 'PMP application noise skipped');
+  assertTrackerEqual(shouldSkipMessage(f.immediateHiringRecruiter.subject, f.immediateHiringRecruiter.from, f.immediateHiringRecruiter.body), false, 'Immediate hiring recruiter retained');
+  assertTrackerEqual(shouldSkipMessage(f.recruiterFollowUp.subject, f.recruiterFollowUp.from, f.recruiterFollowUp.body), false, 'Recruiter follow-up retained');
+  assertTrackerEqual(shouldSkipMessage(f.mastercardReferral.subject, f.mastercardReferral.from, f.mastercardReferral.body), false, 'Mastercard referral retained');
+  assertTrackerEqual(shouldSkipMessage(f.smartRecruitersOtpNoise.subject, f.smartRecruitersOtpNoise.from, f.smartRecruitersOtpNoise.body), true, 'SmartRecruiters OTP skipped');
+  assertTrackerEqual(StatusUtils.determineStatus(f.immediateHiringRecruiter.subject, f.immediateHiringRecruiter.body, ''), f.immediateHiringRecruiter.status, 'Recruiter outreach status');
+  assertTrackerEqual(StatusUtils.determineStatus(f.recruiterFollowUp.subject, f.recruiterFollowUp.body, ''), f.recruiterFollowUp.status, 'Recruiter follow-up status');
+  assertTrackerEqual(StatusUtils.determineStatus(f.mastercardReferral.subject, f.mastercardReferral.body, ''), f.mastercardReferral.status, 'Referral status');
+  assertTrackerEqual(JobUtils.extractJobTitle(f.mastercardReferral.subject, f.mastercardReferral.body, f.mastercardReferral.from, ''), f.mastercardReferral.title, 'Referral title extraction');
+  assertTrackerEqual(CompanyUtils.extractCompany(f.mastercardReferral.subject, f.mastercardReferral.body, f.mastercardReferral.from, ''), f.mastercardReferral.company, 'Referral company extraction');
+  assertTrackerEqual(JobUtils.extractJobTitle(f.immediateHiringRecruiter.subject, f.immediateHiringRecruiter.body, f.immediateHiringRecruiter.from, ''), f.immediateHiringRecruiter.title, 'Recruiter title extraction');
+  assertTrackerEqual(getStatusUpdateDecision('Interview Request', new Date('2026-01-01T00:00:00Z'), 'Rejected', new Date('2026-01-02T00:00:00Z')).status, 'Rejected', 'newer rejection replaces interview');
+  assertTrackerEqual(getStatusUpdateDecision('Rejected', new Date('2026-01-02T00:00:00Z'), 'Interview Request', new Date('2026-01-03T00:00:00Z')).status, 'Interview Request', 'newer interview replaces rejection');
+  assertTrackerEqual(getStatusUpdateDecision('Interview Request', new Date('2026-01-02T00:00:00Z'), 'Status Update', new Date('2026-01-03T00:00:00Z')).status, 'Interview Request', 'generic status update does not erase interview');
+  assertTrackerEqual(buildAuditSnippet('Noise header', 'sender@example.com', 'Header line '.repeat(50) + 'We are not moving forward with your application at this time.').indexOf('not moving forward') !== -1, true, 'signal snippet includes rejection anchor');
   assertTrackerEqual(StatusUtils.determineStatus(f.shiftTechnologyInterview.subject, f.shiftTechnologyInterview.body, ''), f.shiftTechnologyInterview.status, 'Shift Technology status');
   assertTrackerEqual(JobUtils.extractJobTitle(f.linkedInConfirmation.subject, f.linkedInConfirmation.body, f.linkedInConfirmation.from, ''), f.linkedInConfirmation.title, 'LinkedIn title');
   assertTrackerEqual(CompanyUtils.extractCompany(f.linkedInConfirmation.subject, f.linkedInConfirmation.body, f.linkedInConfirmation.from, ''), f.linkedInConfirmation.company, 'LinkedIn company');
