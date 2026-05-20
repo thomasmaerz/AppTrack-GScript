@@ -48,6 +48,41 @@ function getHigherPriorityStatus(currentStatus, candidateStatus) {
   return (priority[candidateStatus] || 0) > (priority[currentStatus] || 0) ? candidateStatus : currentStatus;
 }
 
+function coerceDateValue_(value) {
+  if (value instanceof Date) return value;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    const mmddyyyy = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (mmddyyyy) {
+      const month = Number(mmddyyyy[1]) - 1;
+      const day = Number(mmddyyyy[2]);
+      const year = Number(mmddyyyy[3]);
+      const parsed = new Date(year, month, day);
+      return isNaN(parsed.getTime()) ? null : parsed;
+    }
+    const parsed = new Date(trimmed);
+    return isNaN(parsed.getTime()) ? null : parsed;
+  }
+  return null;
+}
+
+function getStatusUpdateDecision(currentStatus, currentDateUpdated, candidateStatus, candidateDate) {
+  const current = currentStatus || '';
+  const candidate = candidateStatus || '';
+  const currentDate = coerceDateValue_(currentDateUpdated);
+  const nextDate = coerceDateValue_(candidateDate);
+  const shouldTouch = !currentDate || !nextDate || nextDate > currentDate;
+
+  if (!candidate) return { status: current, shouldUpdate: false, shouldTouch: false, reason: 'empty_candidate' };
+  if (current === 'Offer Received' && candidate !== 'Offer Received') return { status: current, shouldUpdate: false, shouldTouch: false, reason: 'offer_sticky' };
+  if (currentDate && nextDate && nextDate < currentDate) return { status: current, shouldUpdate: false, shouldTouch: false, reason: 'older_candidate' };
+  if (candidate === 'Status Update' && current && current !== 'Applied' && current !== 'Recruiter Outreach') return { status: current, shouldUpdate: false, shouldTouch: shouldTouch, reason: 'weak_status_update' };
+  if (candidate === 'Recruiter Outreach' && current && current !== 'Status Update') return { status: current, shouldUpdate: false, shouldTouch: shouldTouch, reason: 'weak_recruiter_outreach' };
+  if (candidate === current) return { status: current, shouldUpdate: false, shouldTouch: shouldTouch, reason: 'same_status' };
+  return { status: candidate, shouldUpdate: true, shouldTouch: true, reason: 'newer_meaningful_status' };
+}
+
 function normalizeAuditText_(text) {
   return String(text || '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
 }
