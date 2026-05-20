@@ -11,8 +11,41 @@ Before using `clasp` to manage or execute Apps Script projects, you must enable 
 
 ---
 
-## 2. GCP Project Setup via `gcloud` CLI
-To enable Cloud Logging, the Apps Script Execution API, and the Generative Language API (Gemini), install the [Google Cloud SDK](https://cloud.google.com/sdk/docs/install) and run these terminal commands:
+## 2. Installing the Tools (gcloud CLI & clasp)
+
+You must install both the Google Cloud SDK and clasp before starting the setup. Select the command matching your platform and use-case:
+
+### A. Installing Google Cloud SDK (`gcloud` CLI)
+* **Mac (with Homebrew)**:
+  ```bash
+  brew install --cask google-cloud-sdk
+  ```
+* **Linux / Other OS (without Homebrew)**:
+  Download and run the official installation script:
+  ```bash
+  ./install_google_cloud_sdk.bash
+  ```
+  *(For Windows or other distributions, consult the official [Google Cloud SDK Installation Guide](https://cloud.google.com/sdk/docs/install)).*
+
+### B. Installing clasp (Google Apps Script CLI)
+* **Local Project Dependency (Recommended for CI/CD or scoped workspaces)**:
+  ```bash
+  npm install --save-dev @google/clasp
+  ```
+* **Global Installation (Recommended for quick system-wide execution)**:
+  ```bash
+  npm install -g @google/clasp
+  ```
+* **Mac / Homebrew Alternative**:
+  ```bash
+  brew install clasp-developers/clasp/clasp-cl
+  ```
+
+---
+
+## 3. GCP Project Linkage & API Activation
+
+To enable Cloud Logging, the Apps Script Execution API, and the Generative Language API (Gemini), run these terminal commands in your project root:
 
 ```bash
 # 1. Login to your Google Cloud account
@@ -33,9 +66,22 @@ gcloud services enable generativelanguage.googleapis.com
 
 ---
 
-## 3. Local Clasp Configuration
+## 4. Local Clasp Configuration & Locating Your IDs
+
 `clasp` reads its linkage credentials from the local `.clasp.json` file in the root of the project directory.
 
+### Where to Find Your IDs
+Before configuring clasp, you must locate these two key identifiers:
+* **GCP Project ID**:
+  * Found in the [Google Cloud Console](https://console.cloud.google.com/) on the **Dashboard** homepage under **Project Info**.
+  * Alternatively, click your project selector dropdown at the top of the GCP console window.
+* **Apps Script Script ID**:
+  * Open the [Apps Script editor](https://script.google.com/home).
+  * In the left-hand sidebar, click the **Project Settings** (gear icon).
+  * Under **IDs**, copy the value in the **Script ID** field.
+  * *(Alternatively, extract it directly from the IDE's URL: `https://script.google.com/home/projects/<scriptId>/edit`).*
+
+### Configuration Step
 1. Ensure your `.clasp.json` contains both the standard Google Apps Script **`scriptId`** and your GCP **`projectId`**:
    ```json
    {
@@ -55,7 +101,7 @@ gcloud services enable generativelanguage.googleapis.com
 
 ---
 
-## 4. OAuth Scopes for Keyless Gemini Integration
+## 5. OAuth Scopes for Keyless Gemini Integration
 To bypass traditional API key limitations and securely call the Gemini model under your Google Account identity, the project utilizes keyless OAuth.
 
 ### Required Scopes in `appsscript.json`
@@ -87,7 +133,7 @@ In `geminiUtils.gs`, the API Client tries to authenticate using keyless OAuth cr
 
 ---
 
-## 5. Execution & Log Tailing from Terminal
+## 6. Execution & Log Tailing from Terminal
 
 ### Executing the Audit Function
 Run the resilient 2-stage Gemini Broad Gap Audit directly from your command line:
