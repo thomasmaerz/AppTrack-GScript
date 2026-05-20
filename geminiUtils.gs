@@ -45,14 +45,25 @@ const GeminiClient = {
     
     const systemInstruction = 
       "You are a strict recruitment classification assistant. " +
-      "Analyze the email sender (f), subject (s), and snippet (sn) to classify the email. " +
+      "Analyze the email sender (f), subject (s), snippet (sn), preparsed company hint (pc), and preparsed title hint (pt) to classify the email. " +
       "Definitions:\n" +
-      "- APPLIED: Direct application confirmations.\n" +
-      "- INTERVIEW: Invites, scheduling outreach, or direct recruiter contact.\n" +
+      "- APPLIED: Direct application confirmations, including LinkedIn 'your application was sent to COMPANY'.\n" +
+      "- INTERVIEW_REQUEST: Requests to schedule or attend an interview.\n" +
+      "- INTERVIEW_SCHEDULED: Confirmed interview time/date.\n" +
       "- ASSESSMENT: Coding tests, evaluations, or screenings.\n" +
       "- REJECTED: Rejections, not moving forward updates, or position closed notifications.\n" +
       "- OFFER: Selected for role alerts, contracts, or offer letters.\n" +
-      "- NOISE: Substack/Medium digests, Zillow rentals, bank marketing, password resets, general LinkedIn/Indeed recommendations.\n\n" +
+      "- RECRUITER_OUTREACH: Direct recruiter/human outreach for role, client, contract, opportunity, or resume request.\n" +
+      "- RECRUITER_FOLLOW_UP: Follow-up to prior recruiter outreach.\n" +
+      "- REFERRAL: Referral to a job or company.\n" +
+      "- APPLICATION_UPDATE: Specific update about user's own application.\n" +
+      "- CANDIDATE_ACCOUNT_DRAFT: Candidate account, draft, or complete-application reminder.\n" +
+      "- NOISE: Digests, newsletters, generic recommendations, security/account notices, and non-job applications.\n\n" +
+      "Rules:\n" +
+      "1. LinkedIn subject 'your application was sent to COMPANY' is APPLIED, never NOISE.\n" +
+      "2. Direct recruiter outreach is PASS if role/client/resume/opportunity/profile submission is mentioned.\n" +
+      "3. Generic job alerts/recommendations/digests are NOISE unless about user's own candidacy.\n" +
+      "4. Prefer pc/pt fields as company/title hints when visible.\n\n" +
       "CRITICAL Guardrails:\n" +
       "1. Only classify actual employment/job applications. Applications for financial aid, loans, credit cards, income support, housing, or student portals are NOT job-related and must be classified as NOISE.\n" +
       "2. LinkedIn or Indeed notifications saying 'your application was viewed', 'viewed by', or 'new application updates' are NOISE. They are not direct job applications, interviews, or rejections.\n" +
@@ -82,7 +93,7 @@ const GeminiClient = {
                   rel: { type: "BOOLEAN" },
                   cat: { 
                     type: "STRING", 
-                    enum: ["APPLIED", "INTERVIEW", "ASSESSMENT", "REJECTED", "OFFER", "NOISE"] 
+                    enum: ["APPLIED", "INTERVIEW_REQUEST", "INTERVIEW_SCHEDULED", "ASSESSMENT", "REJECTED", "OFFER", "RECRUITER_OUTREACH", "RECRUITER_FOLLOW_UP", "REFERRAL", "APPLICATION_UPDATE", "CANDIDATE_ACCOUNT_DRAFT", "NOISE"]
                   },
                   conf: { type: "STRING", enum: ["HIGH", "MEDIUM", "LOW"] },
                   rea: { type: "STRING" },

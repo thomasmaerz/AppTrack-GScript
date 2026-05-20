@@ -988,7 +988,7 @@ function runGeminiBroadGapAudit() {
       if (!messages || messages.length === 0) continue;
       const firstMsg = messages[0];
       const body = firstMsg.getPlainBody() || '';
-      const snippet = body.substring(0, 350).replace(/\s+/g, ' ').trim();
+      const snippet = buildAuditSnippet(firstMsg.getSubject(), firstMsg.getFrom(), body);
       
       newRows.push([
         thread.getId(),
@@ -1045,8 +1045,10 @@ function runGeminiBroadGapClassification(spreadsheet) {
     const [threadId, date, from, subject, snippet] = cachedData[i];
     
     // Check regex classification rules
-    const regexSkip = shouldSkipMessage(subject, from, snippet);
-    const regexDecision = regexSkip ? 'SKIP' : 'PASS';
+    const regexResult = classifyRegexDecision(subject, from, snippet);
+    const regexDecision = regexResult.skip ? 'SKIP' : 'PASS';
+    const preparsedCompany = CompanyUtils.extractCompany(subject, snippet, from, '');
+    const preparsedTitle = JobUtils.cleanJobTitle(JobUtils.extractJobTitle(subject, snippet, from, ''));
     
     const idx = String(i + 1).padStart(3, '0');
     idxMap.set(idx, threadId);
@@ -1057,14 +1059,20 @@ function runGeminiBroadGapClassification(spreadsheet) {
       from: from,
       subject: subject,
       snippet: snippet,
-      regexDecision: regexDecision
+      regexDecision: regexDecision,
+      regexReason: regexResult.reason,
+      regexConfidence: regexResult.confidence,
+      preparsedCompany: preparsedCompany,
+      preparsedTitle: preparsedTitle
     });
     
     promptLogs.push({
       idx: idx,
       f: from,
       s: subject,
-      sn: snippet
+      sn: snippet,
+      pc: preparsedCompany,
+      pt: preparsedTitle
     });
   }
   
@@ -1092,9 +1100,9 @@ function runGeminiBroadGapClassification(spreadsheet) {
   
   // Formulate output columns
   const auditData = [[
-    "Thread ID", "Date", "From", "Subject", "Regex Decision", 
-    "Gemini Decision", "Gap Status", "Gemini Class", 
-    "Gemini Company", "Gemini Title", "Gemini Reasoning", "Snippet"
+    "Thread ID", "Date", "From", "Subject", "Regex Decision", "Regex Reason", "Regex Confidence",
+    "Gemini Decision", "Gap Status", "Gemini Class", "Gemini Company", "Gemini Title",
+    "Gemini Reasoning", "Preparsed Company", "Preparsed Title", "Snippet"
   ]];
   
   for (const logItem of threadLogs) {
@@ -1115,9 +1123,18 @@ function runGeminiBroadGapClassification(spreadsheet) {
       cleanTitle = geminiRes.ti || 'Unlisted';
       
       const classMap = {
-        'APPLIED': 'Applied', 'INTERVIEW': 'Interview Request', 
-        'ASSESSMENT': 'Assessment', 'REJECTED': 'Rejected', 
-        'OFFER': 'Offer Received', 'NOISE': 'Noise'
+        'APPLIED': 'Applied',
+        'INTERVIEW_REQUEST': 'Interview Request',
+        'INTERVIEW_SCHEDULED': 'Interview Request',
+        'ASSESSMENT': 'Assessment',
+        'REJECTED': 'Rejected',
+        'OFFER': 'Offer Received',
+        'RECRUITER_OUTREACH': 'Recruiter Outreach',
+        'RECRUITER_FOLLOW_UP': 'Recruiter Follow-up',
+        'REFERRAL': 'Referral',
+        'APPLICATION_UPDATE': 'Status Update',
+        'CANDIDATE_ACCOUNT_DRAFT': 'Status Update',
+        'NOISE': 'Noise'
       };
       geminiClass = classMap[geminiRes.cat] || 'Noise';
     }
@@ -1135,12 +1152,16 @@ function runGeminiBroadGapClassification(spreadsheet) {
       logItem.from,
       logItem.subject,
       logItem.regexDecision,
+      logItem.regexReason,
+      logItem.regexConfidence,
       geminiDecision,
       gapStatus,
       geminiClass,
       cleanCompany,
       cleanTitle,
       reasoning,
+      logItem.preparsedCompany,
+      logItem.preparsedTitle,
       logItem.snippet
     ]);
   }

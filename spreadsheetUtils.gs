@@ -853,7 +853,7 @@ const SpreadsheetUtils = {
                .setHorizontalAlignment("center");
                
     // Gap Status conditional highlight
-    const gapStatusRange = sheet.getRange(2, 7, rowCount - 1, 1);
+    const gapStatusRange = sheet.getRange(2, 9, rowCount - 1, 1);
     const gapStatusValues = gapStatusRange.getValues();
     const backgrounds = [];
     const fontColors = [];
