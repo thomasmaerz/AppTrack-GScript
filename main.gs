@@ -331,7 +331,9 @@ function scanEmails(mode, spreadsheetId) {
       
       // Update the spreadsheet with status and date - add 1 to index for getRange
       const currentStatus = updatedData[rowNumber - 1][statusIndex];
-      pendingCellUpdates.push({ row: rowNumber, status: getHigherPriorityStatus(currentStatus, status), updatedDate: date, threadLink: threadLink });
+      const currentUpdatedDate = updatedData[rowNumber - 1][dateUpdatedIndex];
+      const decision = getStatusUpdateDecision(currentStatus, currentUpdatedDate, status, date);
+      pendingCellUpdates.push({ row: rowNumber, status: decision.shouldUpdate ? decision.status : null, updatedDate: decision.shouldTouch ? date : null, threadLink: decision.shouldTouch ? threadLink : null });
       
       updatesCount++;
     }
@@ -369,11 +371,12 @@ function scanEmails(mode, spreadsheetId) {
 
     // Determine the initial status
     let initialStatus = StatusUtils.determineStatus(subject, body, htmlBody);
+    let initialStatusDate = date;
     
     // If there are multiple messages, check all messages for status clues
     if (messages.length > 1) {
-      // Iterate through all messages in reverse (newest first)
-      for (let i = messages.length - 1; i >= 0; i--) {
+      // Iterate through all messages in chronological order
+      for (let i = 0; i < messages.length; i++) {
         const msg = messages[i];
         const msgSubject = msg.getSubject();
         const msgBody = msg.getPlainBody();
@@ -382,15 +385,11 @@ function scanEmails(mode, spreadsheetId) {
         // Determine status from this message
         const msgStatus = StatusUtils.determineStatus(msgSubject, msgBody, msgHtmlBody);
         
-        // Priority order: Offer > Interview > Assessment > Rejected > Status Update > Applied
-        if (msgStatus === "Offer Received" || 
-            (initialStatus !== "Offer Received" && msgStatus === "Interview Request") ||
-            (initialStatus !== "Offer Received" && initialStatus !== "Interview Request" && 
-             msgStatus === "Assessment") ||
-            (initialStatus !== "Offer Received" && initialStatus !== "Interview Request" && 
-             initialStatus !== "Assessment" && msgStatus === "Rejected") ||
-            (initialStatus === "Applied" && msgStatus === "Status Update")) {
-          initialStatus = msgStatus;
+        const msgDate = msg.getDate();
+        const decision = getStatusUpdateDecision(initialStatus, initialStatusDate, msgStatus, msgDate);
+        if (decision.shouldUpdate) {
+          initialStatus = decision.status;
+          initialStatusDate = msgDate;
         }
       }
     }
@@ -401,11 +400,10 @@ function scanEmails(mode, spreadsheetId) {
       
       // Get the current status from the sheet
       const currentStatus = sheet.getRange(existingRowNum, statusIndex + 1).getValue();
+      const currentUpdatedDate = sheet.getRange(existingRowNum, dateUpdatedIndex + 1).getValue();
+      const decision = getStatusUpdateDecision(currentStatus, currentUpdatedDate, initialStatus, lastDate);
       
-      const nextStatus = getHigherPriorityStatus(currentStatus, initialStatus);
-      const shouldUpdateStatus = nextStatus !== currentStatus;
-      
-      pendingCellUpdates.push({ row: existingRowNum, threadId: threadId, status: shouldUpdateStatus ? nextStatus : null, updatedDate: lastDate, threadLink: threadLink });
+      pendingCellUpdates.push({ row: existingRowNum, threadId: threadId, status: decision.shouldUpdate ? decision.status : null, updatedDate: decision.shouldTouch ? lastDate : null, threadLink: decision.shouldTouch ? threadLink : null });
       
       updatedApplicationsCount++;
     } else {
@@ -446,7 +444,7 @@ function scanEmails(mode, spreadsheetId) {
   pendingCellUpdates.forEach(update => {
     if (update.threadId) sheet.getRange(update.row, threadIdIndex + 1).setValue(update.threadId);
     if (update.status) sheet.getRange(update.row, statusIndex + 1).setValue(update.status);
-    SpreadsheetUtils.formatDateAsLink(sheet, update.row, dateUpdatedIndex + 1, update.threadLink, update.updatedDate);
+    if (update.updatedDate) SpreadsheetUtils.formatDateAsLink(sheet, update.row, dateUpdatedIndex + 1, update.threadLink, update.updatedDate);
   });
   newRowLinks.forEach(link => {
     SpreadsheetUtils.formatDateAsLink(sheet, link.row, dateSubmittedIndex + 1, link.threadLink, link.submittedDate);
@@ -990,7 +988,7 @@ function runGeminiBroadGapAudit() {
       if (!messages || messages.length === 0) continue;
       const firstMsg = messages[0];
       const body = firstMsg.getPlainBody() || '';
-      const snippet = body.substring(0, 350).replace(/\s+/g, ' ').trim();
+      const snippet = buildAuditSnippet(firstMsg.getSubject(), firstMsg.getFrom(), body);
       
       newRows.push([
         thread.getId(),
@@ -1047,8 +1045,10 @@ function runGeminiBroadGapClassification(spreadsheet) {
     const [threadId, date, from, subject, snippet] = cachedData[i];
     
     // Check regex classification rules
-    const regexSkip = shouldSkipMessage(subject, from, snippet);
-    const regexDecision = regexSkip ? 'SKIP' : 'PASS';
+    const regexResult = classifyRegexDecision(subject, from, snippet);
+    const regexDecision = regexResult.skip ? 'SKIP' : 'PASS';
+    const preparsedCompany = CompanyUtils.extractCompany(subject, snippet, from, '');
+    const preparsedTitle = JobUtils.cleanJobTitle(JobUtils.extractJobTitle(subject, snippet, from, ''));
     
     const idx = String(i + 1).padStart(3, '0');
     idxMap.set(idx, threadId);
@@ -1059,14 +1059,20 @@ function runGeminiBroadGapClassification(spreadsheet) {
       from: from,
       subject: subject,
       snippet: snippet,
-      regexDecision: regexDecision
+      regexDecision: regexDecision,
+      regexReason: regexResult.reason,
+      regexConfidence: regexResult.confidence,
+      preparsedCompany: preparsedCompany,
+      preparsedTitle: preparsedTitle
     });
     
     promptLogs.push({
       idx: idx,
       f: from,
       s: subject,
-      sn: snippet
+      sn: snippet,
+      pc: preparsedCompany,
+      pt: preparsedTitle
     });
   }
   
@@ -1094,9 +1100,9 @@ function runGeminiBroadGapClassification(spreadsheet) {
   
   // Formulate output columns
   const auditData = [[
-    "Thread ID", "Date", "From", "Subject", "Regex Decision", 
-    "Gemini Decision", "Gap Status", "Gemini Class", 
-    "Gemini Company", "Gemini Title", "Gemini Reasoning", "Snippet"
+    "Thread ID", "Date", "From", "Subject", "Regex Decision", "Regex Reason", "Regex Confidence",
+    "Gemini Decision", "Gap Status", "Gemini Class", "Gemini Company", "Gemini Title",
+    "Gemini Reasoning", "Preparsed Company", "Preparsed Title", "Snippet"
   ]];
   
   for (const logItem of threadLogs) {
@@ -1117,9 +1123,18 @@ function runGeminiBroadGapClassification(spreadsheet) {
       cleanTitle = geminiRes.ti || 'Unlisted';
       
       const classMap = {
-        'APPLIED': 'Applied', 'INTERVIEW': 'Interview Request', 
-        'ASSESSMENT': 'Assessment', 'REJECTED': 'Rejected', 
-        'OFFER': 'Offer Received', 'NOISE': 'Noise'
+        'APPLIED': 'Applied',
+        'INTERVIEW_REQUEST': 'Interview Request',
+        'INTERVIEW_SCHEDULED': 'Interview Request',
+        'ASSESSMENT': 'Assessment',
+        'REJECTED': 'Rejected',
+        'OFFER': 'Offer Received',
+        'RECRUITER_OUTREACH': 'Recruiter Outreach',
+        'RECRUITER_FOLLOW_UP': 'Recruiter Follow-up',
+        'REFERRAL': 'Referral',
+        'APPLICATION_UPDATE': 'Status Update',
+        'CANDIDATE_ACCOUNT_DRAFT': 'Status Update',
+        'NOISE': 'Noise'
       };
       geminiClass = classMap[geminiRes.cat] || 'Noise';
     }
@@ -1137,12 +1152,16 @@ function runGeminiBroadGapClassification(spreadsheet) {
       logItem.from,
       logItem.subject,
       logItem.regexDecision,
+      logItem.regexReason,
+      logItem.regexConfidence,
       geminiDecision,
       gapStatus,
       geminiClass,
       cleanCompany,
       cleanTitle,
       reasoning,
+      logItem.preparsedCompany,
+      logItem.preparsedTitle,
       logItem.snippet
     ]);
   }

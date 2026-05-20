@@ -121,6 +121,13 @@ const SpreadsheetUtils = {
           textColor = "#b71c1c"; // Dark red
           fontWeight = isRecentUpdate ? "bold" : "normal";
           break;
+        case "Recruiter Outreach":
+        case "Recruiter Follow-up":
+        case "Referral":
+          bgColor = isRecentUpdate ? "#d1c4e9" : "#ede7f6";
+          textColor = "#4527a0";
+          fontWeight = isRecentUpdate ? "bold" : "normal";
+          break;
         case "Status Update":
           bgColor = isRecentUpdate ? "#e0e0e0" : "#f5f5f5"; // Darker gray for recent
           textColor = "#424242"; // Dark gray
@@ -197,6 +204,9 @@ const SpreadsheetUtils = {
       "Interview Request": 0,
       "Offer Received": 0,
       "Rejected": 0,
+      "Recruiter Outreach": 0,
+      "Recruiter Follow-up": 0,
+      "Referral": 0,
       "Status Update": 0,
       "Total": 0
     };
@@ -436,6 +446,13 @@ const SpreadsheetUtils = {
           textColor = "#b71c1c"; // Dark red
           fontWeight = isRecentUpdate ? "bold" : "normal";
           break;
+        case "Recruiter Outreach":
+        case "Recruiter Follow-up":
+        case "Referral":
+          bgColor = isRecentUpdate ? "#d1c4e9" : "#ede7f6";
+          textColor = "#4527a0";
+          fontWeight = isRecentUpdate ? "bold" : "normal";
+          break;
         case "Status Update":
           bgColor = isRecentUpdate ? "#e0e0e0" : "#f5f5f5"; // Gray
           textColor = "#424242"; // Dark gray
@@ -579,6 +596,9 @@ const SpreadsheetUtils = {
       "Interview Request": {bg: "#c8e6c9", text: "#1b5e20"},
       "Offer Received": {bg: "#a5d6a7", text: "#1b5e20"},
       "Rejected": {bg: "#ffcdd2", text: "#b71c1c"},
+      "Recruiter Outreach": {bg: "#ede7f6", text: "#4527a0"},
+      "Recruiter Follow-up": {bg: "#ede7f6", text: "#4527a0"},
+      "Referral": {bg: "#ede7f6", text: "#4527a0"},
       "Status Update": {bg: "#f5f5f5", text: "#424242"}
     };
     
@@ -751,6 +771,12 @@ const SpreadsheetUtils = {
           cell.setBackground("#ffcdd2");
           cell.setFontColor("#b71c1c");
           break;
+        case "Recruiter Outreach":
+        case "Recruiter Follow-up":
+        case "Referral":
+          cell.setBackground("#ede7f6");
+          cell.setFontColor("#4527a0");
+          break;
         case "Status Update":
           cell.setBackground("#f5f5f5");
           cell.setFontColor("#424242");
@@ -794,11 +820,14 @@ const SpreadsheetUtils = {
       .setOption('pieHole', 0.4) // Create a donut chart
       .setOption('colors', [
         '#e3f2fd', // Applied
-        '#f5f5f5', // Status Update
         '#fff9c4', // Assessment
         '#c8e6c9', // Interview Request
         '#a5d6a7', // Offer Received
-        '#ffcdd2'  // Rejected
+        '#ffcdd2', // Rejected
+        '#ede7f6', // Recruiter Outreach
+        '#d1c4e9', // Recruiter Follow-up
+        '#b39ddb', // Referral
+        '#f5f5f5'  // Status Update
       ])
       .setOption('width', 600)
       .setOption('height', 400)
@@ -824,7 +853,7 @@ const SpreadsheetUtils = {
                .setHorizontalAlignment("center");
                
     // Gap Status conditional highlight
-    const gapStatusRange = sheet.getRange(2, 7, rowCount - 1, 1);
+    const gapStatusRange = sheet.getRange(2, 9, rowCount - 1, 1);
     const gapStatusValues = gapStatusRange.getValues();
     const backgrounds = [];
     const fontColors = [];

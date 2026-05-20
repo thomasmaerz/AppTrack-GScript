@@ -24,31 +24,43 @@ const StatusUtils = {
     // Combined content for searching
     const combinedContent = lowerSubject + " " + lowerBody + " " + lowerHtmlBody;
     
-    // Priority: offer > interview > assessment > rejection > application.
     if (this.containsOffer(combinedContent)) {
       return "Offer Received";
-    }
-    // Interview detection
-    else if (this.containsInterview(combinedContent)) {
+    } else if (this.containsInterview(combinedContent)) {
       return "Interview Request";
-    } 
-    // Assessment detection
-    else if (this.containsAssessment(combinedContent)) {
+    } else if (this.containsAssessment(combinedContent)) {
       return "Assessment";
-    }
-    else if (this.containsRejection(combinedContent)) {
+    } else if (this.containsRejection(combinedContent)) {
       return "Rejected";
-    }
-    // Look for application confirmation
-    else if (this.containsApplication(combinedContent)) {
+    } else if (this.containsReferral(combinedContent)) {
+      return "Referral";
+    } else if (this.containsRecruiterFollowUp(combinedContent)) {
+      return "Recruiter Follow-up";
+    } else if (this.containsApplication(combinedContent)) {
       return "Applied";
-    }
-    // Default status if nothing else matches
-    else {
+    } else if (this.containsRecruiterOutreach(combinedContent)) {
+      return "Recruiter Outreach";
+    } else {
       return "Status Update";
     }
   },
   
+  containsReferral: function(content) {
+    const indicators = ["you have been referred", "referred to a job", "referral to", "referred you to"];
+    return indicators.some(indicator => content.includes(indicator));
+  },
+
+  containsRecruiterFollowUp: function(content) {
+    const indicators = ["message replied:", "following up", "follow up", "checking in", "resume & call tomorrow"];
+    const recruiterContext = ["recruiter", "hiring", "opportunity", "role", "position", "resume", "client"];
+    return indicators.some(indicator => content.includes(indicator)) && recruiterContext.some(indicator => content.includes(indicator));
+  },
+
+  containsRecruiterOutreach: function(content) {
+    const indicators = ["immediate hiring", "contract opportunity", "came across your profile", "saw your profile", "send your resume", "forward your resume", "submit your resume", "presenting your profile", "profile to our client"];
+    return indicators.some(indicator => content.includes(indicator));
+  },
+
   /**
    * Checks if content indicates a new application
    * @param {string} content - Combined email content

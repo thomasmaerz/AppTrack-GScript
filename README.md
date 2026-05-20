@@ -166,3 +166,5 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ## Testing
 
 Run `runTrackerTests()` in the Apps Script editor after copying files. It covers representative LinkedIn confirmations and digests, Rogers-style confirmations, low-confidence titles, skip behavior, and status classification.
+
+The regression harness includes a golden corpus for LinkedIn application confirmations, recruiter outreach, referrals, non-job application noise, OTP/security noise, extraction, and date-aware status updates. Production scans use deterministic regex/rule classification; Gemini is only used by the BroadGapLLM audit tool.

@@ -48,8 +48,57 @@ function getHigherPriorityStatus(currentStatus, candidateStatus) {
   return (priority[candidateStatus] || 0) > (priority[currentStatus] || 0) ? candidateStatus : currentStatus;
 }
 
+function coerceDateValue_(value) {
+  if (value instanceof Date) return value;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    const mmddyyyy = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (mmddyyyy) {
+      const month = Number(mmddyyyy[1]) - 1;
+      const day = Number(mmddyyyy[2]);
+      const year = Number(mmddyyyy[3]);
+      const parsed = new Date(year, month, day);
+      return isNaN(parsed.getTime()) ? null : parsed;
+    }
+    const parsed = new Date(trimmed);
+    return isNaN(parsed.getTime()) ? null : parsed;
+  }
+  return null;
+}
+
+function getStatusUpdateDecision(currentStatus, currentDateUpdated, candidateStatus, candidateDate) {
+  const current = currentStatus || '';
+  const candidate = candidateStatus || '';
+  const currentDate = coerceDateValue_(currentDateUpdated);
+  const nextDate = coerceDateValue_(candidateDate);
+  const shouldTouch = !currentDate || !nextDate || nextDate > currentDate;
+
+  if (!candidate) return { status: current, shouldUpdate: false, shouldTouch: false, reason: 'empty_candidate' };
+  if (current === 'Offer Received' && candidate !== 'Offer Received') return { status: current, shouldUpdate: false, shouldTouch: false, reason: 'offer_sticky' };
+  if (currentDate && nextDate && nextDate < currentDate) return { status: current, shouldUpdate: false, shouldTouch: false, reason: 'older_candidate' };
+  if (candidate === 'Status Update' && current && current !== 'Applied' && current !== 'Recruiter Outreach') return { status: current, shouldUpdate: false, shouldTouch: shouldTouch, reason: 'weak_status_update' };
+  if (candidate === 'Recruiter Outreach' && current && current !== 'Status Update') return { status: current, shouldUpdate: false, shouldTouch: shouldTouch, reason: 'weak_recruiter_outreach' };
+  if (candidate === current) return { status: current, shouldUpdate: false, shouldTouch: shouldTouch, reason: 'same_status' };
+  return { status: candidate, shouldUpdate: true, shouldTouch: true, reason: 'newer_meaningful_status' };
+}
+
+function normalizeAuditText_(text) {
+  return String(text || '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
+}
+
+function containsAny_(text, phrases) {
+  const value = String(text || '').toLowerCase();
+  return phrases.some(phrase => value.indexOf(String(phrase).toLowerCase()) !== -1);
+}
+
+function isSpecificLinkedInApplicationSubject_(subjectLower) {
+  return subjectLower.indexOf('your application was sent to') !== -1 ||
+    /^\s*your application (?:to|for) .+ at .+/i.test(subjectLower);
+}
+
 function buildGmailSearchQuery(mode, window) {
-  const signalGroup = '(subject:("thank you for applying" OR "thanks for applying" OR "thank you for your application" OR "thanks for your application" OR "your application was sent" OR "application submitted" OR "successfully applied" OR "your application to" OR "your application for" OR "application received" OR "we received your application" OR "confirmation of your application" OR "interview invitation" OR "schedule interview" OR "interview scheduling" OR "scheduling request" OR "interview request" OR "candidacy update" OR "application status" OR assessment OR "coding challenge" OR "job offer" OR "status update" OR "regarding your application" OR "thank you for your interest" OR "thank you in your interest" OR "update on your candidacy") OR body:("thank you for your interest" OR "thank you for applying" OR "thanks for applying" OR "thank you for your application" OR "thanks for your application" OR "received your application" OR "application has been received" OR "your application was sent" OR "application submitted" OR "successfully applied" OR "your application to" OR "your application for" OR "interview scheduling" OR "interview request" OR "scheduling request" OR "schedule your interview") OR from:(@talent OR @careers OR @jobs OR @hr OR @recruiting OR @hire OR jobs-noreply@linkedin.com OR candidates.workablemail.com OR @inbound.workablemail.com OR greenhouse.io OR greenhouse-mail.io OR lever.co OR myworkdayjobs.com OR myworkday.com OR workday.com OR icims.com OR smartrecruiters.com OR indeed.com OR successfactors.com))';
+  const signalGroup = '(subject:("thank you for applying" OR "thanks for applying" OR "thank you for your application" OR "thanks for your application" OR "your application was sent" OR "application submitted" OR "successfully applied" OR "your application to" OR "your application for" OR "application received" OR "we received your application" OR "confirmation of your application" OR "interview invitation" OR "schedule interview" OR "interview scheduling" OR "scheduling request" OR "interview request" OR "candidacy update" OR "application status" OR assessment OR "coding challenge" OR "job offer" OR "status update" OR "regarding your application" OR "thank you for your interest" OR "thank you in your interest" OR "update on your candidacy" OR "you have been referred" OR "referred to a job" OR "immediate hiring" OR "contract opportunity" OR "came across your profile" OR "send your resume" OR "forward your resume" OR "profile to our client" OR "presenting your profile") OR body:("thank you for your interest" OR "thank you for applying" OR "thanks for applying" OR "thank you for your application" OR "thanks for your application" OR "received your application" OR "application has been received" OR "your application was sent" OR "application submitted" OR "successfully applied" OR "your application to" OR "your application for" OR "interview scheduling" OR "interview request" OR "scheduling request" OR "schedule your interview" OR "you have been referred" OR "referred to a job" OR "immediate hiring" OR "contract opportunity" OR "came across your profile" OR "send your resume" OR "forward your resume" OR "profile to our client" OR "presenting your profile") OR from:(@talent OR @careers OR @jobs OR @hr OR @recruiting OR @hire OR jobs-noreply@linkedin.com OR inmail-hit-reply@linkedin.com OR hit-reply@linkedin.com OR messaging-digest-noreply@linkedin.com OR candidates.workablemail.com OR @inbound.workablemail.com OR greenhouse.io OR greenhouse-mail.io OR lever.co OR myworkdayjobs.com OR myworkday.com OR workday.com OR icims.com OR smartrecruiters.com OR indeed.com OR successfactors.com))';
   const exclusions = '-from:jobs-listings@linkedin.com -from:@glassdoor.com -subject:"password reset" -subject:"weekly application update" -subject:digest';
   return signalGroup + ' ' + exclusions + ' ' + buildDateWindowFilter(window);
 }
@@ -118,13 +167,32 @@ function countGmailQueryUpToCap(query, cap) {
 }
 
 function senderDomain_(from) { const match = String(from || '').match(/@([^>\s]+)/); return match ? match[1].toLowerCase() : ''; }
-function shouldSkipMessage(subject, from, body) {
-  const lowerSubject = String(subject || '').toLowerCase();
-  const lowerBody = String(body || '').toLowerCase();
-  const domain = senderDomain_(from);
+function classifyRegexDecision(subject, from, bodyOrSnippet) {
+  const lowerSubject = normalizeAuditText_(subject).toLowerCase();
+  const lowerBody = normalizeAuditText_(bodyOrSnippet).toLowerCase();
   const fromLower = String(from || '').toLowerCase();
+  const domain = senderDomain_(from);
+  const combined = lowerSubject + ' ' + lowerBody + ' ' + fromLower;
+  const hasSpecificLinkedInApplicationSubject = isSpecificLinkedInApplicationSubject_(lowerSubject);
+  const hasReferralSignal = containsAny_(combined, ['you have been referred', 'referred to a job']);
+  const hasStrongNonOtpJobProcessSignal = containsAny_(combined, [
+    'interview', 'assessment', 'application submitted', 'application received',
+    'your application was sent', 'thank you for applying', 'referred to a job'
+  ]);
+  const hasOtpSignal = containsAny_(combined, ['security code', 'verification code', 'one-time passcode', 'one-time-passcode', 'one-time password', 'one-time code']);
+  const isSecurityAccountNoise = containsAny_(combined, ['oauth application', 'third-party oauth', 'third-party github application', 'security alert', 'authorized to access your github account', 'apps connected to your account']);
+  const isGovernmentNonJobApplication = containsAny_(combined, ['social insurance number', ' sin ', ' nas ', 'passport', 'reisepass', 'consulate', 'income support']);
+  const isEducationCertificationNoise = containsAny_(combined, ['pmp application', 'certification application', 'course brochure', 'program advisor', 'graduate programs', 'admissions', 'graduation application']);
+  const isConsumerAccountNoise = containsAny_(combined, ['billing statement', 'statement is now available', 'tax slip', 'insurance quote', 'road test', 'triangle rewards', 'bonus ct money']);
+  const isFinanceHousingStudentApplicationNoise = containsAny_(combined, ['financial aid', 'loan application', 'credit card application', 'housing application', 'student portal', 'student application']);
+  const isNewsletterNoise = domain.indexOf('substack') !== -1 ||
+    domain.indexOf('beehiiv') !== -1 ||
+    domain.indexOf('medium.com') !== -1 ||
+    fromLower.indexOf('substack') !== -1 ||
+    fromLower.indexOf('beehiiv') !== -1 ||
+    fromLower.indexOf('medium.com') !== -1 ||
+    containsAny_(combined, ['newsletter', 'read the full post', 'read the full story', 'new post on', 'published a new', 'stories for you', 'weekly newsletter']);
 
-  // Unified list of trusted recruitment/ATS domains
   const recruitmentDomains = [
     'greenhouse.io', 'greenhouse-mail.io', 'lever.co', 'myworkdayjobs.com', 'workday.com', 'myworkday.com', 'workdayjobs.com',
     'icims.com', 'smartrecruiters.com', 'successfactors.com', 'workablemail.com',
@@ -133,171 +201,62 @@ function shouldSkipMessage(subject, from, body) {
     'paylocity.com', 'adp.com', 'rippling.com', 'darwinbox.com', 'phenom.com',
     'avature.net', 'randstad.ca', 'randstad.com', 'procom.ca', 'procomservices.com',
     'roberthalf.com', 'roberthalf.ca', 'hays.ca', 'hays.com', 'teema.com',
-    'agilus.ca', 'insight.com', 'appointz.com', 'servus.ca', 'atco.com'
+    'agilus.ca', 'insight.com', 'appointz.com', 'servus.ca', 'atco.com', 'mastercard.com'
   ];
-
   const isRecruitmentDomain = recruitmentDomains.some(d => domain === d || domain.endsWith('.' + d));
 
-  // A. Indeed Apply Direct Confirmation Rescue
-  if (domain === 'indeedapply.indeed.com' || fromLower.includes('indeedapply@indeed.com') || lowerSubject.startsWith('indeed application:')) {
-    return false;
-  }
+  if (lowerSubject.indexOf('your application was sent to') !== -1) return { skip: false, reason: 'linkedin_application_sent', confidence: 'high' };
+  if (hasSpecificLinkedInApplicationSubject) return { skip: false, reason: 'specific_application_update', confidence: 'high' };
+  if (isFinanceHousingStudentApplicationNoise) return { skip: true, reason: 'finance_housing_student_application_noise', confidence: 'high' };
+  if (hasReferralSignal) return { skip: false, reason: 'referral', confidence: 'high' };
+  if (isSecurityAccountNoise) return { skip: true, reason: 'security_account_noise', confidence: 'high' };
+  if (isGovernmentNonJobApplication) return { skip: true, reason: 'government_non_job_application', confidence: 'high' };
+  if (isEducationCertificationNoise) return { skip: true, reason: 'education_certification_noise', confidence: 'high' };
+  if (isConsumerAccountNoise) return { skip: true, reason: 'consumer_account_noise', confidence: 'high' };
+  if (hasOtpSignal && !hasStrongNonOtpJobProcessSignal) return { skip: true, reason: 'otp_noise', confidence: 'high' };
+  if (isNewsletterNoise) return { skip: true, reason: 'newsletter_noise', confidence: 'high' };
+  if (containsAny_(combined, ['not moving forward', 'pursue other candidates', 'position has been filled', 'regret to inform', 'no longer being considered'])) return { skip: false, reason: 'rejection_signal', confidence: 'high' };
+  if (containsAny_(combined, ['interview scheduling', 'interview request', 'schedule your interview', 'invitation to interview'])) return { skip: false, reason: 'interview_signal', confidence: 'high' };
+  if (containsAny_(combined, ['thank you for applying', 'we received your application', 'application received', 'successfully applied', 'regarding your application', 'update on your application'])) return { skip: false, reason: 'application_transactional_signal', confidence: 'high' };
+  if (containsAny_(combined, ['immediate hiring', 'contract opportunity', 'came across your profile', 'saw your profile', 'send your resume', 'forward your resume', 'presenting your profile', 'profile to our client'])) return { skip: false, reason: 'direct_recruiter_outreach', confidence: 'high' };
+  if ((fromLower.indexOf('inmail-hit-reply@linkedin.com') !== -1 || fromLower.indexOf('hit-reply@linkedin.com') !== -1 || fromLower.indexOf('messaging-digest-noreply@linkedin.com') !== -1) && containsAny_(combined, ['opportunity', 'recruiter', 'role', 'position', 'resume', 'client', 'hiring'])) return { skip: false, reason: 'linkedin_recruiter_message', confidence: 'medium' };
 
-  // B. Workday & Greenhouse Transactional Subject Rescue
-  if (isRecruitmentDomain && (
-      lowerSubject.includes('regarding your application') || 
-      lowerSubject.includes('your application') || 
-      lowerSubject.includes('thank you for your interest') ||
-      lowerSubject.includes('thank you for applying') ||
-      lowerSubject.includes('thanks for applying') ||
-      lowerSubject.includes('thank you in your interest') ||
-      lowerSubject.includes('update on your candidacy')
-  )) {
-    return false;
+  if (fromLower.indexOf('jobs-listings') !== -1 || fromLower.indexOf('jobalerts-noreply') !== -1 || (fromLower.indexOf('jobs-noreply') !== -1 && !isSpecificLinkedInApplicationSubject_(lowerSubject))) {
+    if (containsAny_(combined, ['weekly application update', 'new application updates', 'job alert', 'jobs you may be interested', 'jobs similar to', 'apply now', 'viewed by', 'premium', 'upgrade', 'digest'])) return { skip: true, reason: 'job_board_digest_noise', confidence: 'high' };
   }
+  if (isRecruitmentDomain && containsAny_(combined, ['application', 'interview', 'assessment', 'candidacy', 'candidate', 'recruiting', 'hiring'])) return { skip: false, reason: 'trusted_recruiting_domain', confidence: 'medium' };
+  if (isHighConfidenceSubject_(lowerSubject)) return { skip: false, reason: 'high_confidence_subject', confidence: 'medium' };
 
-  // C. Passcode/Verification/Account Registration/Marketing Absolute Exclusions
-  if (lowerSubject.includes('security code') ||
-      lowerSubject.includes('verification code') ||
-      lowerSubject.includes('one-time') ||
-      lowerSubject.includes('verify your') ||
-      lowerSubject.includes('password reset') ||
-      lowerSubject.includes('reset your password') ||
-      lowerSubject.includes('account created') ||
-      lowerSubject.includes('registering with') ||
-      lowerSubject.includes('welcome to') ||
-      lowerSubject.includes('candidate account') ||
-      lowerSubject.includes('complete your candidate profile') ||
-      lowerSubject.includes('one-time-passcode') ||
-      lowerSubject.includes('discover the next steps for your') ||
-      lowerSubject.includes('is a match') ||
-      lowerSubject.includes('job is a match') ||
-      lowerSubject.includes('creating your account') ||
-      lowerSubject.includes('thanks for creating') ||
-      lowerSubject.includes('talent community')) {
-    return true;
-  }
+  return { skip: true, reason: 'no_job_signal', confidence: 'medium' };
+}
 
-  // D. General Marketing & Non-Job Exclusions
-  if (domain.includes('zillow.com') || domain.includes('mst.edu')) {
-    return true;
-  }
+function shouldSkipMessage(subject, from, body) {
+  return classifyRegexDecision(subject, from, body).skip;
+}
 
-  // E. LinkedIn Alert & Suggestion Absolute Exclusions
-  if (fromLower.includes('jobs-listings') || fromLower.includes('jobs-noreply') || fromLower.includes('jobalerts-noreply')) {
-    if (lowerSubject.includes('apply now to') ||
-        lowerSubject.includes('apply to') ||
-        lowerSubject.includes('looking for a new job') ||
-        lowerSubject.includes('new application updates') ||
-        lowerSubject.includes('jobs similar to') ||
-        lowerSubject.includes('similar to') ||
-        lowerSubject.includes('expiring on') ||
-        lowerSubject.includes('viewed by') ||
-        lowerSubject.includes('updates this week') ||
-        lowerSubject.includes('weekly application update') ||
-        lowerSubject.includes('jobs you may be')) {
-      return true;
-    }
-  }
-
-  // F. Indeed Alert & Match Absolute Exclusions
-  if (domain.includes('indeed.com') || fromLower.includes('indeed')) {
-    if (domain === 'match.indeed.com' ||
-        fromLower.includes('@match.indeed.com') ||
-        lowerSubject.includes('+') ||
-        lowerSubject.includes('jobs in') ||
-        lowerSubject.includes('job alert') ||
-        lowerSubject.includes('new job') ||
-        lowerSubject.includes('opportunity in') ||
-        lowerSubject.includes('is hiring for') ||
-        lowerSubject.includes('jobs for you') ||
-        lowerSubject.includes('opportunities in') ||
-        lowerSubject.includes('jobs similar to') ||
-        lowerSubject.includes('more new jobs')) {
-      return true;
-    }
-  }
-
-  // G. Mastercard Talent Network Newsletter Exclusions
-  if (domain.includes('mastercard.com') || fromLower.includes('mastercard')) {
-    if (!lowerSubject.includes('your application') && !lowerSubject.includes('thank you') && !lowerSubject.includes('interview')) {
-      return true;
-    }
-  }
-
-  // H. Job Board / Aggregator Strict Filtering
-  const jobBoardDomains = ['indeed.com', 'linkedin.com', 'theladders.com', 'ladders.com', 'glassdoor.com'];
-  const isJobBoard = jobBoardDomains.some(d => domain === d || domain.endsWith('.' + d));
-  if (isJobBoard) {
-    const isRescued = (
-      domain === 'indeedapply.indeed.com' ||
-      fromLower.includes('indeedapply@indeed.com') ||
-      lowerSubject.startsWith('indeed application:') ||
-      isHighConfidenceSubject_(lowerSubject)
-    );
-    if (!isRescued) {
-      return true; // Skip general job board newsletters/recommendations/alerts
-    }
-  }
-
-  // I. High-confidence subject check
-  if (isHighConfidenceSubject_(lowerSubject)) {
-    return false; // Keep it immediately!
-  }
-
-  // J. Trusted ATS / recruitment domains are automatically kept
-  if (isRecruitmentDomain) {
-    return false; 
-  }
-
-  // K. Body positive keywords check
-  const positiveKeywords = [
-    'your application was sent',
-    'application submitted',
-    'successfully applied',
-    'application received',
-    'we received your application',
-    'thank you for applying',
-    'thank you for your application',
-    'thank you for your interest',
-    'thanks for applying',
-    'thanks for your application',
-    'thanks for your interest',
-    'interview',
-    'assessment',
-    'coding challenge',
-    'not moving forward',
-    'regret to inform',
-    'congratulations',
-    'offer letter'
+function buildAuditSnippet(subject, from, body) {
+  const normalized = normalizeAuditText_(body);
+  if (!normalized) return '';
+  const lower = normalized.toLowerCase();
+  const anchors = [
+    'your application was sent', 'your application to', 'your application for',
+    'thank you for applying', 'we received your application', 'application received',
+    'regarding your application', 'update on your application', 'not moving forward',
+    'pursue other candidates', 'position has been filled', 'interview', 'assessment',
+    'you have been referred', 'referred to a job', 'immediate hiring',
+    'contract opportunity', 'came across your profile', 'send your resume', 'profile to our client'
   ];
-
-  const bodyHasPositive = positiveKeywords.some(keyword => lowerBody.includes(keyword));
-  if (bodyHasPositive) {
-    if (isRecruitmentDomain) {
-      return false; // Recruitment domains are immune to newsletter noise checks
-    }
-    const bodyHasNoise = (
-      domain.includes('substack') || 
-      domain.includes('beehiiv') || 
-      domain.includes('medium.com') ||
-      lowerSubject.includes('newsletter') ||
-      lowerSubject.includes('digest') ||
-      lowerSubject.includes('security alert') ||
-      lowerBody.includes('read the full post') ||
-      lowerBody.includes('read the full story') ||
-      lowerBody.includes('new post on') ||
-      lowerBody.includes('published a new') ||
-      lowerBody.includes('stories for you') ||
-      lowerBody.includes('weekly newsletter')
-    );
-                         
-    if (!bodyHasNoise) {
-      return false;
-    }
-  }
-
-  return true;
+  let firstIndex = -1;
+  anchors.forEach(anchor => {
+    const idx = lower.indexOf(anchor);
+    if (idx !== -1 && (firstIndex === -1 || idx < firstIndex)) firstIndex = idx;
+  });
+  const subjectLower = String(subject || '').toLowerCase();
+  const maxAfter = isSpecificLinkedInApplicationSubject_(subjectLower) ? 700 : 500;
+  if (firstIndex === -1) return normalized.substring(0, 500).trim();
+  const start = Math.max(0, firstIndex - 120);
+  const end = Math.min(normalized.length, firstIndex + maxAfter);
+  return normalized.substring(start, end).trim();
 }
 
 function shouldSkipThread(thread) {
