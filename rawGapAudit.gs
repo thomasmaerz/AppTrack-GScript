@@ -6,7 +6,7 @@ const RAW_GAP_CONFIG = {
   maxRuntimeMs: 5.5 * 60 * 1000,
   stopBufferMs: 30 * 1000,
   resumeDelayMs: 60 * 1000,
-  windowDays: 30
+  windowDays: 60
 };
 
 const RAW_GAP_STAGE = {
