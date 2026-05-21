@@ -246,9 +246,9 @@ function runTrackerTests() {
     { date: new Date('2026-02-01T12:00:00Z') }
   ];
   const denseWindow = findRawGapDensestWindowFromRows_(densityRows);
-  assertTrackerEqual(denseWindow.count, 4, 'RawGap densest window count');
+  assertTrackerEqual(denseWindow.count, 3, 'RawGap densest window count');
   assertTrackerEqual(denseWindow.start.toISOString(), '2026-01-01T00:00:00.000Z', 'RawGap densest window earliest tie/start');
-  assertTrackerEqual(denseWindow.endExclusive.toISOString(), '2026-04-01T00:00:00.000Z', 'RawGap densest window 90-day exclusive end');
+  assertTrackerEqual(denseWindow.endExclusive.toISOString(), '2026-01-31T00:00:00.000Z', 'RawGap densest window 30-day exclusive end');
 
   const rawWindow = { start: new Date('2026-01-01T00:00:00Z'), endExclusive: new Date('2026-01-31T00:00:00Z') };
   assertTrackerEqual(isRawGapMessageInWindow_(new Date('2026-01-01T00:00:00Z'), rawWindow), true, 'RawGap includes start boundary');

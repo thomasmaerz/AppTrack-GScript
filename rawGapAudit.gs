@@ -6,7 +6,7 @@ const RAW_GAP_CONFIG = {
   maxRuntimeMs: 5.5 * 60 * 1000,
   stopBufferMs: 30 * 1000,
   resumeDelayMs: 60 * 1000,
-  windowDays: 90
+  windowDays: 30
 };
 
 const RAW_GAP_STAGE = {
@@ -23,7 +23,8 @@ const RAW_GAP_KEYS = {
   windowEndExclusive: 'raw_gap_window_end_exclusive',
   extractionStart: 'raw_gap_extraction_start',
   classificationNextRow: 'raw_gap_classification_next_row',
-  missedNextRow: 'raw_gap_missed_next_row'
+  missedNextRow: 'raw_gap_missed_next_row',
+  running: 'raw_gap_running'
 };
 
 function getRawGapHeaders_() {
@@ -240,14 +241,19 @@ function getRawGapSheetOrThrow_(spreadsheet) {
 }
 
 function runRawGapAudit() {
+  const properties = getRawGapProperties_();
+  if (properties.getProperty(RAW_GAP_KEYS.running) === 'true') {
+    throw new Error('RawGapAudit is already running. Wait for the current run to finish or resume.');
+  }
+
   const startTime = Date.now();
   const spreadsheet = getOrCreateSpreadsheet();
   clearRawGapProgress_();
   deleteRawGapTriggers_();
+  properties.setProperty(RAW_GAP_KEYS.running, 'true');
 
   const preflight = preflightRawGapAudit_(spreadsheet);
   setRawGapWindowProperties_(preflight.window);
-  const properties = getRawGapProperties_();
   properties.setProperty(RAW_GAP_KEYS.stage, RAW_GAP_STAGE.extract);
   properties.setProperty(RAW_GAP_KEYS.extractionStart, '0');
   properties.setProperty(RAW_GAP_KEYS.classificationNextRow, '2');
@@ -330,15 +336,24 @@ function extractRawGapMessages_(spreadsheet, startTime) {
   const existingMessageIds = getRawGapExistingMessageIds_(sheet);
   const auditWindow = buildRawGapAuditWindowLabel_(window);
 
+  Logger.log('RawGapAudit extraction START. Query: ' + query);
+  let totalRowsWritten = 0;
+  let totalPages = 0;
+
   while (true) {
     if (isRawGapNearExecutionLimit_(startTime)) {
+      Logger.log('RawGapAudit extraction PAUSED at page ' + totalPages + ', offset ' + extractionStart + ', rows written ' + totalRowsWritten + '.');
       properties.setProperty(RAW_GAP_KEYS.extractionStart, String(extractionStart));
       scheduleRawGapResume_();
       return false;
     }
 
+    Logger.log('RawGapAudit extraction page ' + (totalPages + 1) + ' at offset ' + extractionStart + '...');
     const threads = GmailApp.search(query, extractionStart, RAW_GAP_CONFIG.extractionPageSize);
-    if (!threads || threads.length === 0) return true;
+    if (!threads || threads.length === 0) {
+      Logger.log('RawGapAudit extraction COMPLETE. Total pages: ' + totalPages + ', total rows written: ' + totalRowsWritten + '.');
+      return true;
+    }
 
     const messages2D = GmailApp.getMessagesForThreads(threads);
     const rows = [];
@@ -366,11 +381,19 @@ function extractRawGapMessages_(spreadsheet, startTime) {
 
     if (rows.length > 0) {
       sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
+      totalRowsWritten += rows.length;
+      Logger.log('RawGapAudit page ' + (totalPages + 1) + ': ' + threads.length + ' threads, ' + rows.length + ' in-window message rows written.');
+    } else {
+      Logger.log('RawGapAudit page ' + (totalPages + 1) + ': ' + threads.length + ' threads, 0 new in-window rows.');
     }
 
+    totalPages++;
     extractionStart += threads.length;
     properties.setProperty(RAW_GAP_KEYS.extractionStart, String(extractionStart));
-    if (threads.length < RAW_GAP_CONFIG.extractionPageSize) return true;
+    if (threads.length < RAW_GAP_CONFIG.extractionPageSize) {
+      Logger.log('RawGapAudit extraction COMPLETE. Total pages: ' + totalPages + ', total rows written: ' + totalRowsWritten + '.');
+      return true;
+    }
   }
 }
 
@@ -516,11 +539,19 @@ function classifyRawGapRows_(spreadsheet, startTime) {
   const properties = getRawGapProperties_();
   const sheet = getRawGapSheetOrThrow_(spreadsheet);
   const lastRow = sheet.getLastRow();
-  if (lastRow < 2) return true;
+  if (lastRow < 2) {
+    Logger.log('RawGapAudit classification SKIPPED: no data rows.');
+    return true;
+  }
 
+  Logger.log('RawGapAudit classification START. ' + lastRow + ' data rows to classify.');
   let nextRow = findNextRawGapClassificationRow_(sheet, properties.getProperty(RAW_GAP_KEYS.classificationNextRow));
+  let totalClassified = 0;
+  let batchCount = 0;
+
   while (nextRow <= lastRow) {
     if (isRawGapNearExecutionLimit_(startTime)) {
+      Logger.log('RawGapAudit classification PAUSED at row ' + nextRow + ', classified ' + totalClassified + ' rows in ' + batchCount + ' batches.');
       properties.setProperty(RAW_GAP_KEYS.classificationNextRow, String(nextRow));
       scheduleRawGapResume_();
       return false;
@@ -544,10 +575,14 @@ function classifyRawGapRows_(spreadsheet, startTime) {
       continue;
     }
 
+    batchCount++;
+    Logger.log('RawGapAudit classification batch ' + batchCount + ': ' + promptRows.length + ' rows (rows ' + rowNumbers[0] + '-' + rowNumbers[rowNumbers.length - 1] + ').');
+
     let results;
     try {
       results = classifyRawJobBatch_(promptRows);
     } catch (e) {
+      Logger.log('RawGapAudit classification FAILED at batch ' + batchCount + ': ' + e.toString());
       properties.setProperty(RAW_GAP_KEYS.classificationNextRow, String(nextRow));
       scheduleRawGapResume_();
       return false;
@@ -562,10 +597,12 @@ function classifyRawGapRows_(spreadsheet, startTime) {
       sheet.getRange(rowNumber, 8, 1, 4).setValues([[result.isJob, result.category, result.reason, result.confidence]]);
     }
 
+    totalClassified += rowNumbers.length;
     nextRow = findNextRawGapClassificationRow_(sheet, nextRow + batchSize);
     properties.setProperty(RAW_GAP_KEYS.classificationNextRow, String(nextRow));
     if (nextRow <= lastRow) Utilities.sleep(1000);
   }
+  Logger.log('RawGapAudit classification COMPLETE. ' + totalClassified + ' rows classified in ' + batchCount + ' batches.');
   return true;
 }
 
@@ -587,14 +624,21 @@ function markRawGapMisses_(spreadsheet, startTime) {
   const properties = getRawGapProperties_();
   const sheet = getRawGapSheetOrThrow_(spreadsheet);
   const lastRow = sheet.getLastRow();
-  if (lastRow < 2) return true;
+  if (lastRow < 2) {
+    Logger.log('RawGapAudit missed-marking SKIPPED: no data rows.');
+    return true;
+  }
 
+  Logger.log('RawGapAudit missed-marking START. ' + lastRow + ' data rows, ' + Object.keys(loadRawGapBaselineThreadSet_(spreadsheet)).length + ' baseline threads.');
   const baselineThreadSet = loadRawGapBaselineThreadSet_(spreadsheet);
   let nextRow = findNextRawGapMissedRow_(sheet, properties.getProperty(RAW_GAP_KEYS.missedNextRow));
   const batchSize = 500;
+  let totalMarked = 0;
+  let batchCount = 0;
 
   while (nextRow <= lastRow) {
     if (isRawGapNearExecutionLimit_(startTime)) {
+      Logger.log('RawGapAudit missed-marking PAUSED at row ' + nextRow + ', marked ' + totalMarked + ' rows in ' + batchCount + ' batches.');
       properties.setProperty(RAW_GAP_KEYS.missedNextRow, String(nextRow));
       scheduleRawGapResume_();
       return false;
@@ -608,10 +652,13 @@ function markRawGapMisses_(spreadsheet, startTime) {
     });
     sheet.getRange(nextRow, 12, output.length, 2).setValues(output);
 
+    totalMarked += count;
+    batchCount++;
     nextRow += count;
     properties.setProperty(RAW_GAP_KEYS.missedNextRow, String(nextRow));
   }
 
+  Logger.log('RawGapAudit missed-marking COMPLETE. ' + totalMarked + ' rows marked in ' + batchCount + ' batches.');
   formatRawGapAuditSheet_(sheet);
   return true;
 }
