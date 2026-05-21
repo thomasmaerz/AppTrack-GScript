@@ -281,7 +281,7 @@ function runTrackerTests() {
   }
 
   const rawQuery = buildRawGapGmailQuery_({ start: new Date('2026-01-01T00:00:00Z'), endExclusive: new Date('2026-01-31T00:00:00Z') });
-  assertTrackerEqual(rawQuery.indexOf('after:') === 0, true, 'RawGap query starts with after');
+  assertTrackerEqual(rawQuery.indexOf('in:anywhere after:') === 0, true, 'RawGap query starts with in:anywhere and after');
   assertTrackerEqual(rawQuery.indexOf(' before:') !== -1, true, 'RawGap query includes before');
   assertTrackerEqual(rawQuery.indexOf('application') === -1, true, 'RawGap query has no application keyword');
 

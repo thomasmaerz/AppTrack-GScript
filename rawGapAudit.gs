@@ -302,7 +302,7 @@ function runRawGapAuditStage_(spreadsheet, startTime) {
 }
 
 function buildRawGapGmailQuery_(window) {
-  return 'after:' + formatScanDate_(window.start) + ' before:' + formatScanDate_(window.endExclusive);
+  return 'in:anywhere after:' + formatScanDate_(window.start) + ' before:' + formatScanDate_(window.endExclusive);
 }
 
 function getRawGapExistingMessageIds_(sheet) {
