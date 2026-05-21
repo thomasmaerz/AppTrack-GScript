@@ -33,6 +33,7 @@ function onOpen() {
     .addItem('Run Broad Search Gap Audit', 'runBroadSearchGapAudit')
     .addSeparator()
     .addItem('Run Gemini Broad Gap Audit', 'runGeminiBroadGapAudit')
+    .addItem('Run Raw Gap Audit', 'runRawGapAudit')
     .addItem('Clear Broad Search Cache DB', 'clearBroadSearchDB')
     .addSeparator()
     .addItem('Run Tracker Tests', 'runTrackerTests')

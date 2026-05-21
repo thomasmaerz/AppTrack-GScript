@@ -25,7 +25,10 @@ function clearAllTrackerState() {
   properties.deleteProperty(SCAN_KEYS.historicalSearchStart);
   properties.deleteProperty(SCAN_KEYS.historicalSearchQuery);
 }
-function daysBefore_(date, days) { const copy = new Date(date); copy.setDate(copy.getDate() - days); return copy; }
+function daysBefore_(date, days) {
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  return new Date(date.getTime() - (days * DAY_MS));
+}
 function buildRecentScanWindow(lastSuccess, runStart) { return { start: daysBefore_(lastSuccess || daysBefore_(runStart, SCAN_CONFIG.defaultRecentDays - SCAN_CONFIG.overlapDays), SCAN_CONFIG.overlapDays), end: runStart }; }
 function buildHistoricalScanWindow(windowEnd) { return { start: daysBefore_(windowEnd, SCAN_CONFIG.historicalWindowDays), end: windowEnd }; }
 function getHistoricalWindowEnd(runStart) { const value = scanProperties_().getProperty(SCAN_KEYS.historicalWindowEnd); return value ? new Date(value) : runStart; }
