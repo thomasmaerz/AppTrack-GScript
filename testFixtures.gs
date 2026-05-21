@@ -222,5 +222,78 @@ function runTrackerTests() {
   assertTrackerEqual(mockGeminiRes.threadId, 't1', 'Mock thread mapping verified');
   assertTrackerEqual(mockGeminiRes.isJobRelated, true, 'Mock job relation mapping verified');
 
+  const rawHeaders = getRawGapHeaders_();
+  assertTrackerEqual(rawHeaders.length, 14, 'RawGap headers include all expected columns');
+  assertTrackerEqual(rawHeaders[0], 'Thread ID', 'RawGap header A');
+  assertTrackerEqual(rawHeaders[1], 'Message ID', 'RawGap header B');
+  assertTrackerEqual(rawHeaders[13], 'audit window', 'RawGap header N');
+
+  assertTrackerEqual(rawGapHeadersMatch_(rawHeaders), true, 'RawGap exact headers match');
+  assertTrackerEqual(rawGapHeadersMatch_(rawHeaders.slice(0, 13)), false, 'RawGap short headers mismatch');
+  assertTrackerEqual(rawGapHeadersMatch_(rawHeaders.concat(['extra'])), false, 'RawGap extra headers mismatch');
+  assertTrackerEqual(rawGapHeadersMatch_(['Thread ID', 'Date', 'From']), false, 'RawGap legacy headers mismatch');
+
+  const renamedOne = buildRawDumpArchiveName_(new Date('2026-05-21T14:03:04Z'), {});
+  assertTrackerEqual(/^rawdumpDB\.\d{8}-\d{6}$/.test(renamedOne), true, 'RawGap archive name has datestamp');
+  const taken = {};
+  taken[renamedOne] = true;
+  assertTrackerEqual(buildRawDumpArchiveName_(new Date('2026-05-21T14:03:04Z'), taken), renamedOne + '.2', 'RawGap archive name resolves collision');
+
+  const densityRows = [
+    { date: new Date('2026-01-01T12:00:00Z') },
+    { date: new Date('2026-01-02T12:00:00Z') },
+    { date: new Date('2026-01-30T12:00:00Z') },
+    { date: new Date('2026-02-01T12:00:00Z') }
+  ];
+  const denseWindow = findRawGapDensestWindowFromRows_(densityRows);
+  assertTrackerEqual(denseWindow.count, 3, 'RawGap densest window count');
+  assertTrackerEqual(denseWindow.start.toISOString(), '2026-01-01T00:00:00.000Z', 'RawGap densest window earliest tie/start');
+  assertTrackerEqual(denseWindow.endExclusive.toISOString(), '2026-01-31T00:00:00.000Z', 'RawGap densest window 30-day exclusive end');
+
+  const rawWindow = { start: new Date('2026-01-01T00:00:00Z'), endExclusive: new Date('2026-01-31T00:00:00Z') };
+  assertTrackerEqual(isRawGapMessageInWindow_(new Date('2026-01-01T00:00:00Z'), rawWindow), true, 'RawGap includes start boundary');
+  assertTrackerEqual(isRawGapMessageInWindow_(new Date('2026-01-30T23:59:59Z'), rawWindow), true, 'RawGap includes final instant before end');
+  assertTrackerEqual(isRawGapMessageInWindow_(new Date('2026-01-31T00:00:00Z'), rawWindow), false, 'RawGap excludes end boundary');
+
+  assertTrackerEqual(buildRawGapMissedDecision_('N', 'thread-a', { 'thread-a': true }).wasMissed, 'N', 'RawGap not-job is not missed');
+  assertTrackerEqual(buildRawGapMissedDecision_('Y', 'thread-a', { 'thread-a': true }).reason, 'thread_found_in_BroadGapLLM', 'RawGap found thread reason');
+  assertTrackerEqual(buildRawGapMissedDecision_('Y', 'thread-b', { 'thread-a': true }).wasMissed, 'Y', 'RawGap missing job thread flagged');
+  assertTrackerEqual(buildRawGapMissedDecision_('Y', 'thread-b', { 'thread-a': true }).reason, 'job_thread_not_in_BroadGapLLM', 'RawGap missing job reason');
+
+  const broadRows = [
+    ['Thread ID', 'Date', 'From', 'Subject', 'Regex Decision', 'Regex Reason', 'Regex Confidence', 'Gemini Decision', 'Gap Status', 'Gemini Class'],
+    ['t-noise', '2026-01-01T00:00:00.000Z', '', '', '', '', '', '', '', 'Noise'],
+    ['t-applied', '2026-01-02T00:00:00.000Z', '', '', '', '', '', '', '', 'Applied'],
+    ['t-recruiter', new Date('2026-01-03T00:00:00Z'), '', '', '', '', '', '', '', 'Recruiter Outreach'],
+    ['', '2026-01-04T00:00:00.000Z', '', '', '', '', '', '', '', 'Applied']
+  ];
+  const parsedBaseline = parseRawGapBaselineRows_(broadRows);
+  assertTrackerEqual(parsedBaseline.threadSet['t-applied'], true, 'RawGap baseline thread set includes applied');
+  assertTrackerEqual(parsedBaseline.threadSet['t-recruiter'], true, 'RawGap baseline thread set includes recruiter');
+  assertTrackerEqual(parsedBaseline.threadSet['t-noise'], true, 'RawGap baseline thread set includes noise thread for matching');
+  assertTrackerEqual(parsedBaseline.verifiedRows.length, 2, 'RawGap density rows exclude noise and blank thread');
+
+  try {
+    parseRawGapBaselineRows_([['Date', 'Gemini Class']]);
+    throw new Error('RawGap missing Thread ID header did not fail');
+  } catch (e) {
+    assertTrackerEqual(String(e).indexOf('Thread ID') !== -1, true, 'RawGap missing Thread ID header fails clearly');
+  }
+
+  const rawQuery = buildRawGapGmailQuery_({ start: new Date('2026-01-01T00:00:00Z'), endExclusive: new Date('2026-01-31T00:00:00Z') });
+  assertTrackerEqual(rawQuery.indexOf('after:') === 0, true, 'RawGap query starts with after');
+  assertTrackerEqual(rawQuery.indexOf(' before:') !== -1, true, 'RawGap query includes before');
+  assertTrackerEqual(rawQuery.indexOf('application') === -1, true, 'RawGap query has no application keyword');
+
+  assertTrackerEqual(normalizeRawGapConfidence_('HIGH'), 1, 'RawGap HIGH confidence normalized');
+  assertTrackerEqual(normalizeRawGapConfidence_('MEDIUM'), 0.66, 'RawGap MEDIUM confidence normalized');
+  assertTrackerEqual(normalizeRawGapConfidence_('LOW'), 0.33, 'RawGap LOW confidence normalized');
+  assertTrackerEqual(normalizeRawGapConfidence_(0.94), 0.94, 'RawGap numeric confidence preserved');
+  const normalizedJob = normalizeRawGapClassificationResult_({ idx: '2', isJob: true, cat: 'RESPONSE', reason: 'Candidate replied to recruiter.', conf: 'HIGH' });
+  assertTrackerEqual(normalizedJob.isJob, 'Y', 'RawGap classification true maps to Y');
+  assertTrackerEqual(normalizedJob.confidence, 1, 'RawGap classification confidence normalized');
+  const normalizedNoise = normalizeRawGapClassificationResult_({ idx: '3', isJob: false, cat: 'NOISE', reason: 'Job alert.', conf: 'LOW' });
+  assertTrackerEqual(normalizedNoise.isJob, 'N', 'RawGap classification false maps to N');
+
   return 'All tracker tests passed';
 }

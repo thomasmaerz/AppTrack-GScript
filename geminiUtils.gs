@@ -59,16 +59,17 @@ const GeminiClient = {
       "- REFERRAL: Confirmation that you have been formally referred to a specific job or company.\n" +
       "- APPLICATION_UPDATE: Direct, specific status change or update regarding user's own active candidacy workflow.\n" +
       "- CANDIDATE_ACCOUNT_DRAFT: Reminders to complete draft application or create candidate portal account.\n" +
+      "- RESPONSE: Direct emails sent by the user (candidate) to a company, recruiter, or hiring team as a reply, follow-up, resume submission, or application response.\n" +
       "- NOISE: All out-of-scope emails including automated job alerts, search-agent digests, public job fair invites, newsletters, career advice, account security notices, and consumer/financial marketing.\n\n" +
       "Classification Rules:\n" +
       "1. Automated Digests vs. Pipeline: Any email containing a list of multiple jobs, phrases like 'matched your search agent', 'talent community', 'new jobs posted from', or periodic subscription footers such as 'every 7 days' is strictly NOISE. They do not represent active application events.\n" +
       "2. Events & Job Fairs: Public career fairs, multi-company hiring events, webinars, and bulk promotional invitations are out of scope and must be classified as NOISE.\n" +
-      "3. Sourcing Validation: RECRUITER_OUTREACH requires personalized, direct 1-on-1 sourcing targeting the user's specific background, role fit, resume, profile, client submission, or availability. Automated marketing, newsletters, talent-community blasts, or generic event invitations from talent acquisition domains are NOISE.\n" +
+      "3. Sourcing Validation: RECRUITER_OUTREACH requires personalized, direct 1-on-1 sourcing matching the candidate's senior profile (e.g. PM, PMP). Outreaches for completely irrelevant junior technical roles (e.g. Desktop Support, Field Technician) or generic automated talent blasts are strictly NOISE.\n" +
       "4. LinkedIn Sent Confirmations: Precise LinkedIn subject matching 'your application was sent to COMPANY' must be classified as APPLIED.\n" +
       "5. Specific Application Subjects: Subjects like 'your application to TITLE at COMPANY' or 'your application for TITLE at COMPANY' are about user's own candidacy. Classify as APPLIED, APPLICATION_UPDATE, REJECTED, INTERVIEW_REQUEST, or ASSESSMENT based on snippet content; do not classify as NOISE solely because sender is LinkedIn or a job platform.\n" +
       "6. Company/title extraction: If pc or pt are provided and not 'Unlisted', use them unless clearly contradicted. If company/title are visible in subject patterns like 'sent to COMPANY' or 'TITLE at COMPANY', extract them. Use 'Unlisted' only when not visible.\n\n" +
       "CRITICAL Guardrails:\n" +
-      "1. Strict Application Focus: Only classify real job/employment pipeline workflows. Financial aid, credit cards, loans, housing, student portals, government benefits, certifications, passport/consulate workflows, or consumer rewards programs are strictly NOISE.\n" +
+      "1. Strict Application Focus: Only classify active job/employment pipeline workflows (both incoming and user-sent). Emails sent BY the user (candidate) to a company, recruiter, or hiring team must be classified as RESPONSE (not NOISE) if they represent active application submittals, resume follow-ups, or recruiter replies. Career coaching/guidance programs (e.g. WorkBC, MCG Careers), professional communities (e.g. CTO Craft Slack invites), university admissions (e.g. Missouri S&T), certification/graduation/driving applications (e.g. PMP, road tests), financial aid (e.g. Income Support), government welfare/SIN applications, or consumer marketing are strictly NOISE.\n" +
       "2. Disambiguating Updates: Generic platform metrics/engagement notices like 'your application was viewed', 'viewed by', profile views, or aggregate platform alerts are NOISE. However, if email communicates specific, material progression or status change regarding user's personal interview/hiring pipeline for named role, classify it as APPLICATION_UPDATE.\n" +
       "3. Direct Rejection Override: Prioritize explicit rejection phrases such as 'not moving forward', 'pursue other candidates', 'decided to proceed with others', 'position has been filled', or 'no longer being considered' found in snippet. If email signals end of user's individual candidacy, classify as REJECTED.\n\n" +
       "Return a JSON object containing results array of exact same size as input. " +
@@ -96,7 +97,7 @@ const GeminiClient = {
                   rel: { type: "BOOLEAN" },
                   cat: { 
                     type: "STRING", 
-                    enum: ["APPLIED", "INTERVIEW_REQUEST", "INTERVIEW_SCHEDULED", "ASSESSMENT", "REJECTED", "OFFER", "RECRUITER_OUTREACH", "RECRUITER_FOLLOW_UP", "REFERRAL", "APPLICATION_UPDATE", "CANDIDATE_ACCOUNT_DRAFT", "NOISE"]
+                    enum: ["APPLIED", "INTERVIEW_REQUEST", "INTERVIEW_SCHEDULED", "ASSESSMENT", "REJECTED", "OFFER", "RECRUITER_OUTREACH", "RECRUITER_FOLLOW_UP", "REFERRAL", "APPLICATION_UPDATE", "CANDIDATE_ACCOUNT_DRAFT", "NOISE", "RESPONSE"]
                   },
                   conf: { type: "STRING", enum: ["HIGH", "MEDIUM", "LOW"] },
                   rea: { type: "STRING" },

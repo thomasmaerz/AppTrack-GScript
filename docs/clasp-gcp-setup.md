@@ -1,118 +1,48 @@
-# Local Setup, GCP Linkage & Gemini Execution Guide
+# clasp / GCP setup for CLI test runs
 
-This guide details how to configure `clasp` (Google Apps Script CLI), link your script to a standard GCP Project, enable GCP Logging and generative APIs, set up the required OAuth scopes, and run the Gemini broad gap audit locally from the command line.
-
----
-
-## 1. Apps Script Global API Enablement
-Before using `clasp` to manage or execute Apps Script projects, you must enable the Google Apps Script API on your Google account:
-1. Navigate to [script.google.com/home/settings](https://script.google.com/home/settings).
-2. Toggle the **Google Apps Script API** setting to **ON**.
-
----
-
-## 2. Installing the Tools (gcloud CLI & clasp)
-
-You must install both the Google Cloud SDK and clasp before starting the setup. Select the command matching your platform and use-case:
-
-### A. Installing Google Cloud SDK (`gcloud` CLI)
-* **Mac (with Homebrew)**:
-  ```bash
-  brew install --cask google-cloud-sdk
-  ```
-* **Linux / Other OS (without Homebrew)**:
-  Download and run the official installation script:
-  ```bash
-  ./install_google_cloud_sdk.bash
-  ```
-  *(For Windows or other distributions, consult the official [Google Cloud SDK Installation Guide](https://cloud.google.com/sdk/docs/install)).*
-
-### B. Installing clasp (Google Apps Script CLI)
-* **Local Project Dependency (Recommended for CI/CD or scoped workspaces)**:
-  ```bash
-  npm install --save-dev @google/clasp
-  ```
-* **Global Installation (Recommended for quick system-wide execution)**:
-  ```bash
-  npm install -g @google/clasp
-  ```
-* **Mac / Homebrew Alternative**:
-  ```bash
-  brew install clasp-developers/clasp/clasp-cl
-  ```
-
----
-
-## 3. GCP Project Linkage & API Activation
-
-To enable Cloud Logging, the Apps Script Execution API, and the Generative Language API (Gemini), run these terminal commands in your project root:
+This project can run Apps Script functions from the terminal with `clasp run`, for example:
 
 ```bash
-# 1. Login to your Google Cloud account
-gcloud auth login
-
-# 2. Set your active GCP project ID
-gcloud config set project YOUR_GCP_PROJECT_ID
-
-# 3. Enable the Apps Script Execution API (for clasp run)
-gcloud services enable script.googleapis.com
-
-# 4. Enable Cloud Logging API (for clasp logs)
-gcloud services enable logging.googleapis.com
-
-# 5. Enable the Generative Language API (for keyless Gemini access)
-gcloud services enable generativelanguage.googleapis.com
+clasp run runTrackerTests --user apptrack
 ```
 
----
+`clasp run` calls the Apps Script API `scripts.run` endpoint. For this project, CLI execution requires a project-owned OAuth Desktop client with the Apps Script project's scopes, not clasp's default Google-provided OAuth client.
 
-## 4. Local Clasp Configuration & Locating Your IDs
+## Project identity
 
-`clasp` reads its linkage credentials from the local `.clasp.json` file in the root of the project directory.
+- Apps Script ID: `172m5F9MzN_4it1MtOBEWKyLfw8JAz4cgIKriRU7OvJwrQLYkUdILFi4P`
+- GCP project ID: `gen-lang-client-0843415856`
+- GCP project number: `663621054218`
+- Named clasp user for project-scoped auth: `apptrack`
 
-### Where to Find Your IDs
-Before configuring clasp, you must locate these two key identifiers:
-* **GCP Project ID**:
-  * Found in the [Google Cloud Console](https://console.cloud.google.com/) on the **Dashboard** homepage under **Project Info**.
-  * Alternatively, click your project selector dropdown at the top of the GCP console window.
-* **Apps Script Script ID**:
-  * Open the [Apps Script editor](https://script.google.com/home).
-  * In the left-hand sidebar, click the **Project Settings** (gear icon).
-  * Under **IDs**, copy the value in the **Script ID** field.
-  * *(Alternatively, extract it directly from the IDE's URL: `https://script.google.com/home/projects/<scriptId>/edit`).*
+## Required GCP APIs
 
-### Configuration Step
-1. Ensure your `.clasp.json` contains both the standard Google Apps Script **`scriptId`** and your GCP **`projectId`**:
-   ```json
-   {
-     "scriptId": "YOUR_APPS_SCRIPT_ID",
-     "rootDir": ".",
-     "projectId": "YOUR_GCP_PROJECT_ID"
-   }
-   ```
-2. Log in locally to `clasp`:
-   ```bash
-   npx clasp login
-   ```
-3. Push your latest code changes to the remote container:
-   ```bash
-   npx clasp push
-   ```
+The Apps Script, Gmail, Sheets, and Drive APIs must be enabled on the shared GCP project:
 
----
+```bash
+gcloud config set project gen-lang-client-0843415856
+gcloud services enable \
+  script.googleapis.com \
+  gmail.googleapis.com \
+  sheets.googleapis.com \
+  drive.googleapis.com \
+  --project gen-lang-client-0843415856
+```
 
-## 5. OAuth Scopes for Keyless Gemini Integration
-To bypass traditional API key limitations and securely call the Gemini model under your Google Account identity, the project utilizes keyless OAuth.
+Verify:
 
-### Required Scopes in `appsscript.json`
-Your `appsscript.json` must declare the specific REST retriever scope under `"oauthScopes"`. This authorizes the Google Generative Language API to authenticate your script:
+```bash
+gcloud services list --enabled --project gen-lang-client-0843415856
+```
+
+## Apps Script manifest
+
+`appsscript.json` must allow API execution and declare the scopes used by the project:
+
 ```json
 {
-  "timeZone": "America/Toronto",
-  "exceptionLogging": "CLOUD",
-  "runtimeVersion": "V8",
   "executionApi": {
-    "access": "MYSELF"
+    "access": "ANYONE"
   },
   "oauthScopes": [
     "https://www.googleapis.com/auth/gmail.readonly",
@@ -126,32 +56,88 @@ Your `appsscript.json` must declare the specific REST retriever scope under `"oa
 }
 ```
 
-### The Keyless Dual-Handshake Authentication
-In `geminiUtils.gs`, the API Client tries to authenticate using keyless OAuth credentials first. If this fails, it falls back to the static `gemini_api_key` stored in your script properties:
-1. **OAuth REST Handshake**: Reads the execution identity token using `ScriptApp.getOAuthToken()`.
-2. **Quota Tracking Header**: Attaches the user project context using the `'x-goog-user-project': gcpProjectId` header to direct Gemini's request limits to your specific GCP project billing/quota footprint.
+Push manifest changes after editing:
 
----
-
-## 6. Execution & Log Tailing from Terminal
-
-### Executing the Audit Function
-Run the resilient 2-stage Gemini Broad Gap Audit directly from your command line:
 ```bash
-npx clasp run runGeminiBroadGapAudit
+clasp push --force
 ```
-*Note: Stage 1 (snippet extraction and caching) will start immediately. If the Gmail processing exceeds 5 minutes, it will automatically schedule background triggers on Apps Script to resume and complete Stage 2 (Gemini Batch Classification) in the cloud.*
 
-### Accessing & Tailing Logs
-Keep a live window open on your terminal to watch the execution logs stream in:
-```bash
-# Fetch recent logs
-npx clasp logs
+## OAuth Desktop client
 
-# Tail logs in real-time (hot reload)
-npx clasp logs --watch
-```
-*Alternatively, you can open the Cloud Logging Console in your browser directly with:*
+Create an OAuth client in the same GCP project:
+
 ```bash
-npx clasp open-logs
+clasp open-credentials-setup
 ```
+
+In Cloud Console:
+
+1. Use project `gen-lang-client-0843415856`.
+2. Configure the OAuth consent screen if prompted.
+3. Create credentials → OAuth client ID.
+4. Application type: **Desktop app**.
+5. Download the client JSON.
+6. Save it in the local project root as `client_secret.json`.
+
+Never commit `client_secret.json`; it is ignored by `.gitignore`.
+
+## Login with project scopes
+
+Use a named clasp user so this project-scoped login does not replace the default clasp login:
+
+```bash
+clasp login \
+  --user apptrack \
+  --use-project-scopes \
+  --include-clasp-scopes \
+  --creds client_secret.json
+```
+
+During login, approve with the Google account that owns or can edit the Apps Script project.
+
+Verify the credential uses the project-owned OAuth client:
+
+```bash
+clasp show-authorized-user --user apptrack
+```
+
+Expected shape:
+
+```text
+You are logged in as maerz.thomas@gmail.com.
+OAuth client ID: 663621054218-...apps.googleusercontent.com (user-provided).
+```
+
+## Run tests from CLI
+
+Use the named project-scoped clasp user:
+
+```bash
+clasp push --user apptrack
+clasp run runTrackerTests --user apptrack
+```
+
+Expected result:
+
+```text
+All tracker tests passed
+```
+
+## Non-dev execution fallback
+
+Normal `clasp run` uses development mode. If non-dev execution is required, deploy an API executable first:
+
+```bash
+clasp deploy --description "API executable for clasp run" --user apptrack
+clasp run runTrackerTests --nondev --user apptrack
+```
+
+## Why this setup is needed
+
+Apps Script `scripts.run` requires a properly scoped OAuth token and a standard GCP project shared by the script and calling client. This project uses Gmail, Sheets, Drive, triggers, and external requests, so the OAuth token used by `clasp run` must include the project's Apps Script scopes. The project-owned Desktop OAuth client plus `--use-project-scopes --include-clasp-scopes` provides that token.
+
+## References
+
+- Apps Script API execute guide: https://developers.google.com/apps-script/api/how-tos/execute
+- Apps Script `scripts.run` reference: https://developers.google.com/apps-script/api/reference/rest/v1/scripts/run
+- clasp run docs: https://github.com/google/clasp/blob/master/docs/run.md
