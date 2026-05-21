@@ -36,7 +36,7 @@ function getRawGapHeaders_() {
 
 function rawGapHeadersMatch_(headers) {
   const expected = getRawGapHeaders_();
-  if (!headers || headers.length < expected.length) return false;
+  if (!headers || headers.length !== expected.length) return false;
   for (let i = 0; i < expected.length; i++) {
     if (String(headers[i] || '').trim() !== expected[i]) return false;
   }
@@ -503,6 +503,7 @@ function findNextRawGapClassificationRow_(sheet, startRow) {
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) return lastRow + 1;
   const row = Math.max(2, Number(startRow || 2));
+  if (row > lastRow) return lastRow + 1;
   const values = sheet.getRange(row, 8, lastRow - row + 1, 4).getValues();
   for (let i = 0; i < values.length; i++) {
     const current = values[i];
@@ -574,6 +575,7 @@ function findNextRawGapMissedRow_(sheet, startRow) {
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) return lastRow + 1;
   const row = Math.max(2, Number(startRow || 2));
+  if (row > lastRow) return lastRow + 1;
   const values = sheet.getRange(row, 12, lastRow - row + 1, 2).getValues();
   for (let i = 0; i < values.length; i++) {
     if (!values[i][0] || !values[i][1]) return row + i;
@@ -635,4 +637,8 @@ function smokeRawGapPreflightOnly_() {
     count: window.count,
     baselineThreadCount: Object.keys(window.baselineThreadSet).length
   }));
+}
+
+function smokeRawGapPreflightOnly() {
+  return smokeRawGapPreflightOnly_();
 }

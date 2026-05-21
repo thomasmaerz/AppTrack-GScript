@@ -230,6 +230,7 @@ function runTrackerTests() {
 
   assertTrackerEqual(rawGapHeadersMatch_(rawHeaders), true, 'RawGap exact headers match');
   assertTrackerEqual(rawGapHeadersMatch_(rawHeaders.slice(0, 13)), false, 'RawGap short headers mismatch');
+  assertTrackerEqual(rawGapHeadersMatch_(rawHeaders.concat(['extra'])), false, 'RawGap extra headers mismatch');
   assertTrackerEqual(rawGapHeadersMatch_(['Thread ID', 'Date', 'From']), false, 'RawGap legacy headers mismatch');
 
   const renamedOne = buildRawDumpArchiveName_(new Date('2026-05-21T14:03:04Z'), {});
