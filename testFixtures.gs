@@ -79,6 +79,13 @@ const TestFixtures = {
     status: 'Recruiter Outreach',
     title: 'Senior IT Systems Administrator'
   },
+  recruiterOutreachWithDigestPhrase: {
+    subject: 'Acme is hiring for Senior Project Manager',
+    from: 'Recruiter <recruiter@staffing.example.com>',
+    body: 'Hi Thomas, I came across your profile and have a contract opportunity for a Senior Project Manager with my client. Please send your resume if interested.',
+    skip: false,
+    status: 'Recruiter Outreach'
+  },
   recruiterFollowUp: {
     subject: 'Message replied: Immediate Hiring - Senior IT Systems Administrator',
     from: 'Adithya Naidu <adithya@recruiting.example.com>',
@@ -123,6 +130,12 @@ const TestFixtures = {
     subject: 'Application received in your student portal',
     from: 'University <admissions@example.edu>',
     body: 'Your student portal application was received by admissions.',
+    skip: true
+  },
+  universityApplicationConfirmationNoise: {
+    subject: 'Your application to Missouri S&T has been received',
+    from: 'Admissions <admissions@mst.edu>',
+    body: 'Thank you for applying to Missouri S&T. Your application has been received by the admissions team.',
     skip: true
   },
   workdayCandidateAccountOtpNoise: {
@@ -200,6 +213,12 @@ const TestFixtures = {
     body: 'New jobs matching your profile. Apply now to CGI and explore more jobs below.',
     skip: true
   },
+  genericStartApplicationDigestNoise: {
+    subject: 'Project Manager at Acme and 4 more new jobs',
+    from: 'Indeed <jobalert@indeed.com>',
+    body: 'Start your application for Project Manager at Acme and explore more jobs below. Jobs are based on your profile and preferences.',
+    skip: true
+  },
   incomeSupportApplicationNoise: {
     subject: 'Confirmation: Income Support Application Submitted',
     from: 'ALSS-Notification <alssnotification@gov.ab.ca>',
@@ -261,6 +280,7 @@ function runTrackerTests() {
   assertTrackerEqual(shouldSkipMessage(f.sinApplicationNoise.subject, f.sinApplicationNoise.from, f.sinApplicationNoise.body), true, 'SIN application noise skipped');
   assertTrackerEqual(shouldSkipMessage(f.pmpApplicationNoise.subject, f.pmpApplicationNoise.from, f.pmpApplicationNoise.body), true, 'PMP application noise skipped');
   assertTrackerEqual(shouldSkipMessage(f.immediateHiringRecruiter.subject, f.immediateHiringRecruiter.from, f.immediateHiringRecruiter.body), false, 'Immediate hiring recruiter retained');
+  assertTrackerEqual(shouldSkipMessage(f.recruiterOutreachWithDigestPhrase.subject, f.recruiterOutreachWithDigestPhrase.from, f.recruiterOutreachWithDigestPhrase.body), false, 'Recruiter outreach with digest phrase retained');
   assertTrackerEqual(shouldSkipMessage(f.recruiterFollowUp.subject, f.recruiterFollowUp.from, f.recruiterFollowUp.body), false, 'Recruiter follow-up retained');
   assertTrackerEqual(shouldSkipMessage(f.mastercardReferral.subject, f.mastercardReferral.from, f.mastercardReferral.body), false, 'Mastercard referral retained');
   assertTrackerEqual(shouldSkipMessage(f.smartRecruitersOtpNoise.subject, f.smartRecruitersOtpNoise.from, f.smartRecruitersOtpNoise.body), true, 'SmartRecruiters OTP skipped');
@@ -268,6 +288,7 @@ function runTrackerTests() {
   assertTrackerEqual(shouldSkipMessage(f.creditCardApplicationNoise.subject, f.creditCardApplicationNoise.from, f.creditCardApplicationNoise.body), true, 'Credit card application noise skipped');
   assertTrackerEqual(shouldSkipMessage(f.housingApplicationNoise.subject, f.housingApplicationNoise.from, f.housingApplicationNoise.body), true, 'Housing application noise skipped');
   assertTrackerEqual(shouldSkipMessage(f.studentPortalApplicationNoise.subject, f.studentPortalApplicationNoise.from, f.studentPortalApplicationNoise.body), true, 'Student portal application noise skipped');
+  assertTrackerEqual(shouldSkipMessage(f.universityApplicationConfirmationNoise.subject, f.universityApplicationConfirmationNoise.from, f.universityApplicationConfirmationNoise.body), true, 'University admissions application confirmation skipped');
   assertTrackerEqual(shouldSkipMessage(f.workdayCandidateAccountOtpNoise.subject, f.workdayCandidateAccountOtpNoise.from, f.workdayCandidateAccountOtpNoise.body), true, 'Workday candidate account OTP skipped');
   assertTrackerEqual(shouldSkipMessage(f.smartRecruitersCandidateAccountOtpNoise.subject, f.smartRecruitersCandidateAccountOtpNoise.from, f.smartRecruitersCandidateAccountOtpNoise.body), true, 'SmartRecruiters candidate account OTP skipped');
   assertTrackerEqual(shouldSkipMessage(f.mastercardCareerAdviceNoise.subject, f.mastercardCareerAdviceNoise.from, f.mastercardCareerAdviceNoise.body), true, 'Mastercard career advice skipped');
@@ -280,6 +301,7 @@ function runTrackerTests() {
   assertTrackerEqual(shouldSkipMessage(f.indeedInviteDigestNoise.subject, f.indeedInviteDigestNoise.from, f.indeedInviteDigestNoise.body), true, 'Indeed invite digest skipped');
   assertTrackerEqual(shouldSkipMessage(f.cgiNjoynConfirmation.subject, f.cgiNjoynConfirmation.from, f.cgiNjoynConfirmation.body), false, 'CGI Njoyn confirmation retained');
   assertTrackerEqual(shouldSkipMessage(f.cgiIndeedDigestNoise.subject, f.cgiIndeedDigestNoise.from, f.cgiIndeedDigestNoise.body), true, 'CGI Indeed digest skipped');
+  assertTrackerEqual(shouldSkipMessage(f.genericStartApplicationDigestNoise.subject, f.genericStartApplicationDigestNoise.from, f.genericStartApplicationDigestNoise.body), true, 'Generic start application digest skipped');
   assertTrackerEqual(shouldSkipMessage(f.incomeSupportApplicationNoise.subject, f.incomeSupportApplicationNoise.from, f.incomeSupportApplicationNoise.body), true, 'Income Support application skipped');
   assertTrackerEqual(shouldSkipMessage(f.pmpProfileJobApplication.subject, f.pmpProfileJobApplication.from, f.pmpProfileJobApplication.body), false, 'PMP profile job application retained');
   assertTrackerEqual(shouldSkipMessage(f.linkedInRecruiterDigest.subject, f.linkedInRecruiterDigest.from, f.linkedInRecruiterDigest.body), false, 'LinkedIn recruiter digest retained');
