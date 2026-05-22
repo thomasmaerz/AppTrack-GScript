@@ -99,7 +99,7 @@ const GeminiClient = {
                   rel: { type: "BOOLEAN" },
                   cat: { 
                     type: "STRING", 
-                    enum: ["APPLIED", "INTERVIEW_REQUEST", "INTERVIEW_SCHEDULED", "ASSESSMENT", "REJECTED", "OFFER", "RECRUITER_OUTREACH", "RECRUITER_FOLLOW_UP", "REFERRAL", "APPLICATION_UPDATE", "CANDIDATE_ACCOUNT_DRAFT", "NOISE"]
+                    enum: ["APPLIED", "INTERVIEW_REQUEST", "INTERVIEW_SCHEDULED", "ASSESSMENT", "REJECTED", "OFFER", "RECRUITER_OUTREACH", "RECRUITER_FOLLOW_UP", "REFERRAL", "APPLICATION_UPDATE", "CANDIDATE_ACCOUNT_DRAFT", "NOISE", "RESPONSE"]
                   },
                   conf: { type: "STRING", enum: ["HIGH", "MEDIUM", "LOW"] },
                   rea: { type: "STRING" },

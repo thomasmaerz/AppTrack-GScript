@@ -113,12 +113,13 @@ function containsPattern_(text, pattern) { return pattern.test(String(text || ''
 function hasBulkJobDigestSignal_(subjectLower, combinedLower) {
   return containsPattern_(subjectLower, /\b\d+\s+more\s+(?:new\s+)?jobs\b/) ||
     containsPattern_(subjectLower, /\+\s*\d+\s+(?:new\s+)?jobs\b/) ||
+    containsPattern_(subjectLower, /\bapply to .+ and more\b/) ||
     containsAny_(combinedLower, [
       'job alert', 'jobs you may be interested', 'jobs similar to', 'explore more jobs below',
       'jobs are based on your preferences', 'based on your profile and preferences',
-      'matched your search', 'search agent', 'every 7 days', 'apply now', 'is hiring for',
+      'matched your search', 'search agent', 'every 7 days', 'is hiring for',
       'this job is a match', 'new job opportunities', 'new jobs posted from', 'weekly application update',
-      'new application updates', 'viewed by', 'profile viewed', 'premium', 'upgrade'
+      'new application updates', 'profile viewed'
     ]);
 }
 
@@ -137,7 +138,7 @@ function hasNonEmploymentApplicationObject_(combinedLower) {
   return containsAny_(combinedLower, [
     'social insurance number', ' sin ', ' nas ', 'passport', 'reisepass', 'consulate',
     'income support', 'financial aid', 'loan application', 'credit card application',
-    'housing application', 'student portal', 'student application', 'admission decision',
+    'housing application', 'student portal', 'student application', 'admission decision', 'admissions application',
     'office of admissions', 'graduation application', 'pmp application', 'certification application',
     'road test', 'driver examiner', 'oauth application', 'third-party oauth', 'third-party github application'
   ]);
@@ -165,7 +166,7 @@ function hasRejectionSignal_(combinedLower) {
     'proceed with other candidates', 'move forward with other candidates',
     'position has been filled', 'regret to inform', 'no longer being considered',
     'not successful', 'selected another candidate', 'more closely aligned',
-    'going in a different direction', 'next round of our hiring process'
+    'going in a different direction'
   ]);
 }
 
@@ -288,7 +289,7 @@ function classifyRegexDecision(subject, from, bodyOrSnippet) {
   const hasOtpSignal = containsAny_(combined, ['security code', 'verification code', 'one-time passcode', 'one-time-passcode', 'one-time password', 'one-time code']);
   const isSecurityAccountNoise = containsAny_(combined, ['oauth application', 'third-party oauth', 'third-party github application', 'security alert', 'authorized to access your github account', 'apps connected to your account']);
   const isGovernmentNonJobApplication = containsAny_(combined, ['social insurance number', ' sin ', ' nas ', 'passport', 'reisepass', 'consulate', 'income support']);
-  const isEducationCertificationNoise = containsAny_(combined, ['pmp application', 'certification application', 'course brochure', 'program advisor', 'graduate programs', 'admissions', 'graduation application', 'office of admissions', 'admission decision']);
+  const isEducationCertificationNoise = containsAny_(combined, ['pmp application', 'certification application', 'course brochure', 'program advisor', 'graduate programs', 'admissions application', 'graduation application', 'office of admissions', 'admission decision']);
   const isConsumerAccountNoise = containsAny_(combined, ['billing statement', 'statement is now available', 'tax slip', 'insurance quote', 'road test', 'triangle rewards', 'bonus ct money']);
   const isFinanceHousingStudentApplicationNoise = containsAny_(combined, ['financial aid', 'loan application', 'credit card application', 'housing application', 'student portal', 'student application']);
   const isNewsletterNoise = domain.indexOf('substack') !== -1 ||
@@ -321,7 +322,7 @@ function classifyRegexDecision(subject, from, bodyOrSnippet) {
   if (hasSpecificLinkedInApplicationSubject) return { skip: false, reason: 'specific_application_update', confidence: 'high' };
   if (hasReferralSignal) return { skip: false, reason: 'referral', confidence: 'high' };
 
-  if (hasBulkJobDigestSignal_(lowerSubject, combined)) return { skip: true, reason: 'job_board_digest_noise', confidence: 'high' };
+  if (hasBulkJobDigestSignal_(lowerSubject, combined) && !hasActivePipelineSignal) return { skip: true, reason: 'job_board_digest_noise', confidence: 'high' };
   if ((isNewsletterNoise || hasCareerMarketingSignal_(combined)) && !hasActivePipelineSignal) return { skip: true, reason: 'career_marketing_noise', confidence: 'high' };
   if (containsAny_(combined, ['community membership', 'ctocraft', 'ctocraft community', 'slack invitation']) && !hasActivePipelineSignal) return { skip: true, reason: 'professional_community_noise', confidence: 'high' };
   if (containsAny_(combined, ['job placement coach', 'employment counsellor', 'workbc', 'mcg careers', 'hidden job market workshop']) && !hasActivePipelineSignal) return { skip: true, reason: 'career_services_noise', confidence: 'high' };

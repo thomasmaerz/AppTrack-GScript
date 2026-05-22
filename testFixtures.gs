@@ -149,6 +149,18 @@ const TestFixtures = {
     body: 'Your application has been submitted. Good luck! If you notice an error in your application, please Contact Indeed.',
     skip: false
   },
+  applicationConfirmationWithDigestFooter: {
+    subject: 'Application submitted',
+    from: 'Greenhouse <no-reply@greenhouse.io>',
+    body: 'Your application has been submitted. Apply now to similar jobs and explore more jobs below.',
+    skip: false
+  },
+  admissionsJobApplication: {
+    subject: 'Your application to Director of Admissions at Acme University',
+    from: 'Acme University Careers <careers@acme.edu>',
+    body: 'Your application to Director of Admissions at Acme University has been received by the hiring team.',
+    skip: false
+  },
   indeedInviteDigestNoise: {
     subject: 'IT Applications Manager at Durabuilt Windows and Doors in Edmonton, AB and 8 more new jobs',
     from: 'Indeed <invitetoapply@match.indeed.com>',
@@ -239,6 +251,8 @@ function runTrackerTests() {
   assertTrackerEqual(shouldSkipMessage(f.smartRecruitersCandidateAccountOtpNoise.subject, f.smartRecruitersCandidateAccountOtpNoise.from, f.smartRecruitersCandidateAccountOtpNoise.body), true, 'SmartRecruiters candidate account OTP skipped');
   assertTrackerEqual(shouldSkipMessage(f.mastercardCareerAdviceNoise.subject, f.mastercardCareerAdviceNoise.from, f.mastercardCareerAdviceNoise.body), true, 'Mastercard career advice skipped');
   assertTrackerEqual(shouldSkipMessage(f.indeedApplicationConfirmation.subject, f.indeedApplicationConfirmation.from, f.indeedApplicationConfirmation.body), false, 'Indeed application confirmation retained');
+  assertTrackerEqual(shouldSkipMessage(f.applicationConfirmationWithDigestFooter.subject, f.applicationConfirmationWithDigestFooter.from, f.applicationConfirmationWithDigestFooter.body), false, 'Application confirmation with digest footer retained');
+  assertTrackerEqual(shouldSkipMessage(f.admissionsJobApplication.subject, f.admissionsJobApplication.from, f.admissionsJobApplication.body), false, 'Admissions job application retained');
   assertTrackerEqual(shouldSkipMessage(f.indeedInviteDigestNoise.subject, f.indeedInviteDigestNoise.from, f.indeedInviteDigestNoise.body), true, 'Indeed invite digest skipped');
   assertTrackerEqual(shouldSkipMessage(f.cgiNjoynConfirmation.subject, f.cgiNjoynConfirmation.from, f.cgiNjoynConfirmation.body), false, 'CGI Njoyn confirmation retained');
   assertTrackerEqual(shouldSkipMessage(f.cgiIndeedDigestNoise.subject, f.cgiIndeedDigestNoise.from, f.cgiIndeedDigestNoise.body), true, 'CGI Indeed digest skipped');
