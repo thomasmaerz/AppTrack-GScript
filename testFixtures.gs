@@ -136,6 +136,78 @@ const TestFixtures = {
     from: 'SmartRecruiters <noreply@smartrecruiters.com>',
     body: 'Use this security code to access your candidate application account.',
     skip: true
+  },
+  mastercardCareerAdviceNoise: {
+    subject: 'Learn about the Mastercard hiring process & culture',
+    from: 'Mastercard <talent@careers.mastercard.com>',
+    body: 'Whether you are planning to apply, preparing for an interview, or browsing jobs, our careers site has resources about our hiring process and culture.',
+    skip: true
+  },
+  indeedApplicationConfirmation: {
+    subject: 'Indeed Application: Technical Project Manager',
+    from: 'Indeed Apply <indeedapply@indeed.com>',
+    body: 'Your application has been submitted. Good luck! If you notice an error in your application, please Contact Indeed.',
+    skip: false
+  },
+  indeedInviteDigestNoise: {
+    subject: 'IT Applications Manager at Durabuilt Windows and Doors in Edmonton, AB and 8 more new jobs',
+    from: 'Indeed <invitetoapply@match.indeed.com>',
+    body: 'It looks like your background could be a match. Please submit a quick application if you have interest or explore more jobs below. Jobs are based on your preferences, profile, and activity on Indeed.',
+    skip: true
+  },
+  cgiNjoynConfirmation: {
+    subject: 'Job Application Acknowledgement - Senior Project Manager, J0925-0822',
+    from: 'CGI <help.candidate@njoyn.com>',
+    body: 'Dear Thomas Maerz, thank you for your interest in a career with CGI. We are pleased to confirm the receipt of your resume in response to the job opportunity J0925-0822 - Senior Project Manager.',
+    skip: false
+  },
+  cgiIndeedDigestNoise: {
+    subject: 'CGI is hiring for Infrastructure/IT Project Manager + 6 new jobs',
+    from: 'Indeed <jobalert@indeed.com>',
+    body: 'New jobs matching your profile. Apply now to CGI and explore more jobs below.',
+    skip: true
+  },
+  incomeSupportApplicationNoise: {
+    subject: 'Confirmation: Income Support Application Submitted',
+    from: 'ALSS-Notification <alssnotification@gov.ab.ca>',
+    body: 'This email confirms that your application for Income Support was successfully submitted. A support worker will review your eligibility for benefits.',
+    skip: true
+  },
+  pmpProfileJobApplication: {
+    subject: 'Your application to Technical Project Manager at Acme',
+    from: 'LinkedIn <jobs-noreply@linkedin.com>',
+    body: 'Your application to Technical Project Manager at Acme has an update. Profile: Thomas Maerz, PMP.',
+    skip: false
+  },
+  linkedInRecruiterDigest: {
+    subject: 'Evan just messaged you',
+    from: 'LinkedIn <messaging-digest-noreply@linkedin.com>',
+    body: 'Evan from TEKsystems sent you a message about a Senior Project Manager contract opportunity with a client. Please send your resume if interested.',
+    skip: false
+  },
+  candidateProfileBeforeInterview: {
+    subject: 'Complete Your Konica Minolta Candidate Profile',
+    from: 'Konica Minolta Careers <careers@konicaminolta.com>',
+    body: 'Please complete your candidate profile before your interview next steps for the Solutions Architect position.',
+    skip: false
+  },
+  applicationOtpResubmit: {
+    subject: 'Security code for your application to NetBrain',
+    from: 'Greenhouse <no-reply@us.greenhouse-mail.io>',
+    body: 'Copy and paste this code into the security code field on your application. After you enter the code, resubmit your application.',
+    skip: false
+  },
+  userSentResumeToRecruiter: {
+    subject: 'Resume & Call Tomorrow – Infrastructure Project Manager @ Gibson',
+    from: 'Thomas Maerz <maerz.thomas@gmail.com>',
+    body: 'Hi Jenn, thanks for setting up time to connect tomorrow. I have attached my resume ahead of our call for the Infrastructure Project Manager role.',
+    skip: false
+  },
+  userSentResumeFeedbackNoise: {
+    subject: 'Zeiss Position',
+    from: 'Thomas Maerz <maerz.thomas@gmail.com>',
+    body: 'Would you please review my resume and cover letter to provide feedback for the position I am applying for?',
+    skip: true
   }
 };
 
@@ -165,6 +237,18 @@ function runTrackerTests() {
   assertTrackerEqual(shouldSkipMessage(f.studentPortalApplicationNoise.subject, f.studentPortalApplicationNoise.from, f.studentPortalApplicationNoise.body), true, 'Student portal application noise skipped');
   assertTrackerEqual(shouldSkipMessage(f.workdayCandidateAccountOtpNoise.subject, f.workdayCandidateAccountOtpNoise.from, f.workdayCandidateAccountOtpNoise.body), true, 'Workday candidate account OTP skipped');
   assertTrackerEqual(shouldSkipMessage(f.smartRecruitersCandidateAccountOtpNoise.subject, f.smartRecruitersCandidateAccountOtpNoise.from, f.smartRecruitersCandidateAccountOtpNoise.body), true, 'SmartRecruiters candidate account OTP skipped');
+  assertTrackerEqual(shouldSkipMessage(f.mastercardCareerAdviceNoise.subject, f.mastercardCareerAdviceNoise.from, f.mastercardCareerAdviceNoise.body), true, 'Mastercard career advice skipped');
+  assertTrackerEqual(shouldSkipMessage(f.indeedApplicationConfirmation.subject, f.indeedApplicationConfirmation.from, f.indeedApplicationConfirmation.body), false, 'Indeed application confirmation retained');
+  assertTrackerEqual(shouldSkipMessage(f.indeedInviteDigestNoise.subject, f.indeedInviteDigestNoise.from, f.indeedInviteDigestNoise.body), true, 'Indeed invite digest skipped');
+  assertTrackerEqual(shouldSkipMessage(f.cgiNjoynConfirmation.subject, f.cgiNjoynConfirmation.from, f.cgiNjoynConfirmation.body), false, 'CGI Njoyn confirmation retained');
+  assertTrackerEqual(shouldSkipMessage(f.cgiIndeedDigestNoise.subject, f.cgiIndeedDigestNoise.from, f.cgiIndeedDigestNoise.body), true, 'CGI Indeed digest skipped');
+  assertTrackerEqual(shouldSkipMessage(f.incomeSupportApplicationNoise.subject, f.incomeSupportApplicationNoise.from, f.incomeSupportApplicationNoise.body), true, 'Income Support application skipped');
+  assertTrackerEqual(shouldSkipMessage(f.pmpProfileJobApplication.subject, f.pmpProfileJobApplication.from, f.pmpProfileJobApplication.body), false, 'PMP profile job application retained');
+  assertTrackerEqual(shouldSkipMessage(f.linkedInRecruiterDigest.subject, f.linkedInRecruiterDigest.from, f.linkedInRecruiterDigest.body), false, 'LinkedIn recruiter digest retained');
+  assertTrackerEqual(shouldSkipMessage(f.candidateProfileBeforeInterview.subject, f.candidateProfileBeforeInterview.from, f.candidateProfileBeforeInterview.body), false, 'Candidate profile before interview retained');
+  assertTrackerEqual(shouldSkipMessage(f.applicationOtpResubmit.subject, f.applicationOtpResubmit.from, f.applicationOtpResubmit.body), false, 'Application OTP resubmit retained');
+  assertTrackerEqual(shouldSkipMessage(f.userSentResumeToRecruiter.subject, f.userSentResumeToRecruiter.from, f.userSentResumeToRecruiter.body), false, 'User sent recruiter resume retained');
+  assertTrackerEqual(shouldSkipMessage(f.userSentResumeFeedbackNoise.subject, f.userSentResumeFeedbackNoise.from, f.userSentResumeFeedbackNoise.body), true, 'User sent resume feedback skipped');
   assertTrackerEqual(StatusUtils.determineStatus(f.immediateHiringRecruiter.subject, f.immediateHiringRecruiter.body, ''), f.immediateHiringRecruiter.status, 'Recruiter outreach status');
   assertTrackerEqual(StatusUtils.determineStatus(f.recruiterFollowUp.subject, f.recruiterFollowUp.body, ''), f.recruiterFollowUp.status, 'Recruiter follow-up status');
   assertTrackerEqual(StatusUtils.determineStatus(f.mastercardReferral.subject, f.mastercardReferral.body, ''), f.mastercardReferral.status, 'Referral status');

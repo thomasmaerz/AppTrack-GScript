@@ -43,33 +43,39 @@ const GeminiClient = {
   classifyBatch: function(threadLogs) {
     if (!threadLogs || threadLogs.length === 0) return [];
     
-    const systemInstruction = 
+    const systemInstruction =
       "You are a strict recruitment classification assistant. " +
-      "Analyze the email sender (f), subject (s), snippet (sn), preparsed company hint (pc), and preparsed title hint (pt) to classify the email. " +
-      "Definitions:\n" +
-      "- APPLIED: Direct application confirmations, including LinkedIn 'your application was sent to COMPANY'.\n" +
-      "- INTERVIEW_REQUEST: Requests to schedule or attend an interview.\n" +
-      "- INTERVIEW_SCHEDULED: Confirmed interview time/date.\n" +
-      "- ASSESSMENT: Coding tests, evaluations, or screenings.\n" +
-      "- REJECTED: Rejections, not moving forward updates, or position closed notifications.\n" +
-      "- OFFER: Selected for role alerts, contracts, or offer letters.\n" +
-      "- RECRUITER_OUTREACH: Direct recruiter/human outreach for role, client, contract, opportunity, or resume request.\n" +
-      "- RECRUITER_FOLLOW_UP: Follow-up to prior recruiter outreach.\n" +
-      "- REFERRAL: Referral to a job or company.\n" +
-      "- APPLICATION_UPDATE: Specific update about user's own application.\n" +
-      "- CANDIDATE_ACCOUNT_DRAFT: Candidate account, draft, or complete-application reminder.\n" +
-      "- NOISE: Digests, newsletters, generic recommendations, security/account notices, and non-job applications.\n\n" +
-      "Rules:\n" +
-      "1. LinkedIn subject 'your application was sent to COMPANY' is APPLIED, never NOISE.\n" +
-      "2. Direct recruiter outreach is PASS if role/client/resume/opportunity/profile submission is mentioned.\n" +
-      "3. Generic job alerts/recommendations/digests are NOISE unless about user's own candidacy.\n" +
-      "4. Prefer pc/pt fields as company/title hints when visible.\n\n" +
+      "Analyze email sender (f), subject (s), snippet (sn), preparsed company hint (pc), and preparsed title hint (pt) to classify email. " +
+      "Set rel=true for all categories except NOISE. Set rel=false only for NOISE.\n\n" +
+      "Category Definitions:\n" +
+      "- APPLIED: Direct, individual confirmations that a specific job application was successfully submitted.\n" +
+      "- INTERVIEW_REQUEST: Direct requests from recruiter, employer, or ATS to schedule or attend an interview.\n" +
+      "- INTERVIEW_SCHEDULED: Confirmation details for locked-in interview date/time.\n" +
+      "- ASSESSMENT: Direct invitations for coding tests, technical evaluations, or behavioral screenings linked to active application.\n" +
+      "- REJECTED: Clear notifications that you are not moving forward, position is closed, or another candidate was selected.\n" +
+      "- OFFER: Selected for role, employment contracts, or formal job offer letters.\n" +
+      "- RECRUITER_OUTREACH: Personalized, 1-on-1 sourcing outreach for active opening, client submission, role discussion, or resume request, even if sent through recruiter tooling.\n" +
+      "- RECRUITER_FOLLOW_UP: Direct follow-up tracking prior 1-on-1 recruiter conversation.\n" +
+      "- REFERRAL: Confirmation that you have been formally referred to a specific job or company.\n" +
+      "- APPLICATION_UPDATE: Direct, specific status change or update regarding user's own active candidacy workflow.\n" +
+      "- CANDIDATE_ACCOUNT_DRAFT: Candidate portal, profile, account, draft, or verification step tied to a specific employer recruiting process, referral, application, named role, or interview next step.\n" +
+      "- RESPONSE: Direct emails or calendar actions by the user (candidate) to a company, recruiter, staffing agency, or hiring team as a reply, follow-up, resume submission, application response, accepted interview, or proposed new interview time.\n" +
+      "- NOISE: All out-of-scope emails including automated job alerts, search-agent digests, public job fair invites, newsletters, career advice, account security notices, and consumer/financial/non-employment application workflows.\n\n" +
+      "Classification Rules:\n" +
+      "1. Automated Digests vs. Pipeline: Any email containing a list of multiple jobs, phrases like 'matched your search agent', 'new jobs posted from', 'and N more jobs', 'explore more jobs below', or periodic subscription footers such as 'every 7 days' is strictly NOISE unless it also contains a specific material event for user's own candidacy such as application sent/received, rejection, interview, assessment, offer, referral, or recruiter 1-on-1 message.\n" +
+      "2. Events & Job Fairs: Public career fairs, workshops, multi-company hiring events, webinars, and bulk promotional invitations are out of scope and must be classified as NOISE.\n" +
+      "3. Sourcing Validation: RECRUITER_OUTREACH requires personalized, direct 1-on-1 sourcing. Role seniority/relevance filters apply only to unsolicited RECRUITER_OUTREACH; if the user already applied or the email is an application receipt, rejection, interview, assessment, referral, candidate portal step, or specific application status update, classify it as job-related regardless of whether the title seems junior or imperfectly matched.\n" +
+      "4. LinkedIn Sent Confirmations: Precise LinkedIn subject matching 'your application was sent to COMPANY' must be classified as APPLIED.\n" +
+      "5. Specific Application Subjects: Subjects like 'your application to TITLE at COMPANY' or 'your application for TITLE at COMPANY' are about user's own candidacy. Classify as APPLIED, APPLICATION_UPDATE, REJECTED, INTERVIEW_REQUEST, or ASSESSMENT based on snippet content; do not classify as NOISE solely because sender is LinkedIn or a job platform.\n" +
+      "6. Candidate Portals: Candidate portal/profile/account/draft/verification emails are job-related only when tied to a specific employer recruiting process, referral, application, named role, or interview next step. Generic account creation, talent-community marketing, profile updates, password resets, and security notices with no specific candidacy are NOISE.\n" +
+      "7. Company/title extraction: If pc or pt are provided and not 'Unlisted', use them unless clearly contradicted. If company/title are visible in subject patterns like 'sent to COMPANY' or 'TITLE at COMPANY', extract them. Use 'Unlisted' only when not visible.\n\n" +
       "CRITICAL Guardrails:\n" +
-      "1. Only classify actual employment/job applications. Applications for financial aid, loans, credit cards, income support, housing, or student portals are NOT job-related and must be classified as NOISE.\n" +
-      "2. LinkedIn or Indeed notifications saying 'your application was viewed', 'viewed by', or 'new application updates' are NOISE. They are not direct job applications, interviews, or rejections.\n" +
-      "3. Look for rejection phrases like 'not moving forward', 'pursue other candidates', 'decided to proceed with others', or 'position has been filled' in the snippet, even if they follow standard greetings. If present, classification MUST be REJECTED.\n\n" +
-      "Return a JSON object containing a results array of the exact same size. " +
-      "You MUST output the exact input 'idx' index anchor for every result.";
+      "1. Hard NOISE overrides: Classify as NOISE when the email is primarily about non-employment applications or non-candidacy workflows, including Income Support, SIN/passport/government benefits, financial aid, university/college admissions, graduation, road tests, PMP/PMI/certification, community memberships, Slack/community invites, career coaching, job-placement services, resume feedback, resume keyword tools, or job-search assistance. Do not apply these exclusions merely because a resume/profile/signature mentions PMP, services, tools, platforms, cloud, AI, or similar terms.\n" +
+      "2. Job Platform Metrics: LinkedIn/Indeed/job-platform emails are NOISE when they are generic job alerts, recommendations, digests, profile/application views, 'apply to X and more', 'and N more jobs', or lists of jobs. Specific application sent/received/submitted messages, 'your application to/for TITLE at COMPANY', rejection, under-review, interview, assessment, or next-step messages are job-related.\n" +
+      "3. RESPONSE Boundary: RESPONSE requires direct candidate action in an active employment pipeline. Do not classify emails to friends, career coaches, government support programs, resume reviewers, job-search tools, schools, or generic job-search assistance as RESPONSE.\n" +
+      "4. Direct Rejection Override: Prioritize explicit rejection phrases such as 'not moving forward', 'pursue other candidates', 'decided to proceed with others', 'position has been filled', 'will not be proceeding', or 'no longer being considered' found in snippet. If email signals end of user's individual candidacy, classify as REJECTED.\n\n" +
+      "Return a JSON object containing results array of exact same size as input. " +
+      "You MUST preserve and output exact input 'idx' index anchor per result.";
 
     const promptText = systemInstruction + "\n\nInput JSON:\n" + JSON.stringify(threadLogs);
     
