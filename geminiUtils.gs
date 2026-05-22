@@ -59,8 +59,8 @@ function buildGeminiClassificationPayload_(threadLogs) {
               properties: {
                 idx: { type: "STRING" },
                 rel: { type: "BOOLEAN" },
-                cat: { 
-                  type: "STRING", 
+                cat: {
+                  type: "STRING",
                   enum: ["APPLIED", "INTERVIEW_REQUEST", "INTERVIEW_SCHEDULED", "ASSESSMENT", "REJECTED", "OFFER", "RECRUITER_OUTREACH", "RECRUITER_FOLLOW_UP", "REFERRAL", "APPLICATION_UPDATE", "CANDIDATE_ACCOUNT_DRAFT", "NOISE", "RESPONSE"]
                 },
                 conf: { type: "STRING", enum: ["HIGH", "MEDIUM", "LOW"] },

@@ -3,7 +3,7 @@
   "exceptionLogging": "CLOUD",
   "runtimeVersion": "V8",
   "executionApi": {
-    "access": "MYSELF"
+    "access": "ANYONE"
   },
   "oauthScopes": [
     "https://www.googleapis.com/auth/gmail.readonly",
