@@ -1027,6 +1027,25 @@ function resumeGeminiBroadGapAudit() {
   runGeminiBroadGapAudit();
 }
 
+function mapGeminiCategoryToTrackerStatus_(category) {
+  const classMap = {
+    'APPLIED': 'Applied',
+    'INTERVIEW_REQUEST': 'Interview Request',
+    'INTERVIEW_SCHEDULED': 'Interview Request',
+    'ASSESSMENT': 'Assessment',
+    'REJECTED': 'Rejected',
+    'OFFER': 'Offer Received',
+    'RECRUITER_OUTREACH': 'Recruiter Outreach',
+    'RECRUITER_FOLLOW_UP': 'Recruiter Follow-up',
+    'REFERRAL': 'Referral',
+    'APPLICATION_UPDATE': 'Status Update',
+    'CANDIDATE_ACCOUNT_DRAFT': 'Status Update',
+    'RESPONSE': 'Response',
+    'NOISE': 'Noise'
+  };
+  return classMap[category] || 'Noise';
+}
+
 function runGeminiBroadGapClassification(spreadsheet) {
   const gapDbSheet = spreadsheet.getSheetByName("BroadSearchDB");
   if (!gapDbSheet || gapDbSheet.getLastRow() <= 1) {
@@ -1122,22 +1141,7 @@ function runGeminiBroadGapClassification(spreadsheet) {
       cleanCompany = geminiRes.co || 'Unlisted';
       cleanTitle = geminiRes.ti || 'Unlisted';
       
-      const classMap = {
-        'APPLIED': 'Applied',
-        'INTERVIEW_REQUEST': 'Interview Request',
-        'INTERVIEW_SCHEDULED': 'Interview Request',
-        'ASSESSMENT': 'Assessment',
-        'REJECTED': 'Rejected',
-        'OFFER': 'Offer Received',
-        'RECRUITER_OUTREACH': 'Recruiter Outreach',
-        'RECRUITER_FOLLOW_UP': 'Recruiter Follow-up',
-        'REFERRAL': 'Referral',
-        'APPLICATION_UPDATE': 'Status Update',
-        'CANDIDATE_ACCOUNT_DRAFT': 'Status Update',
-        'RESPONSE': 'Response',
-        'NOISE': 'Noise'
-      };
-      geminiClass = classMap[geminiRes.cat] || 'Noise';
+      geminiClass = mapGeminiCategoryToTrackerStatus_(geminiRes.cat);
     }
     
     let gapStatus = 'MATCH';

@@ -175,6 +175,7 @@ function hasInterviewOrAssessmentSignal_(combinedLower) {
     'interview scheduling', 'interview request', 'schedule your interview', 'schedule an interview',
     'invitation to interview', 'phone interview invitation', 'discuss your application further',
     'schedule a brief introductory meeting', 'moved to the next step of our hiring',
+    'selected for the next round of our hiring process', 'next round of our hiring process',
     'moving forward with', 'previous hiring step', 'coding challenge', 'technical challenge',
     'skills assessment', 'assessment', 'take-home', 'take home'
   ]);

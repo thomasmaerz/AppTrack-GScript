@@ -155,6 +155,27 @@ const TestFixtures = {
     body: 'Your application has been submitted. Apply now to similar jobs and explore more jobs below.',
     skip: false
   },
+  rejectionWithDigestFooter: {
+    subject: 'Update on your application',
+    from: 'Careers <careers@acme.com>',
+    body: 'We are not moving forward with your application at this time. Explore more jobs below.',
+    status: 'Rejected',
+    skip: false
+  },
+  interviewWithDigestFooter: {
+    subject: 'Interview scheduling request',
+    from: 'Talent <talent@acme.com>',
+    body: 'We would like to schedule an interview for your application. Explore more jobs below.',
+    status: 'Interview Request',
+    skip: false
+  },
+  nextRoundHiringProcessUpdate: {
+    subject: 'Next round of our hiring process',
+    from: 'Talent <talent@acme.com>',
+    body: 'You have been selected for the next round of our hiring process. We will share scheduling details shortly.',
+    status: 'Status Update',
+    skip: false
+  },
   admissionsJobApplication: {
     subject: 'Your application to Director of Admissions at Acme University',
     from: 'Acme University Careers <careers@acme.edu>',
@@ -252,6 +273,9 @@ function runTrackerTests() {
   assertTrackerEqual(shouldSkipMessage(f.mastercardCareerAdviceNoise.subject, f.mastercardCareerAdviceNoise.from, f.mastercardCareerAdviceNoise.body), true, 'Mastercard career advice skipped');
   assertTrackerEqual(shouldSkipMessage(f.indeedApplicationConfirmation.subject, f.indeedApplicationConfirmation.from, f.indeedApplicationConfirmation.body), false, 'Indeed application confirmation retained');
   assertTrackerEqual(shouldSkipMessage(f.applicationConfirmationWithDigestFooter.subject, f.applicationConfirmationWithDigestFooter.from, f.applicationConfirmationWithDigestFooter.body), false, 'Application confirmation with digest footer retained');
+  assertTrackerEqual(shouldSkipMessage(f.rejectionWithDigestFooter.subject, f.rejectionWithDigestFooter.from, f.rejectionWithDigestFooter.body), false, 'Rejection with digest footer retained');
+  assertTrackerEqual(shouldSkipMessage(f.interviewWithDigestFooter.subject, f.interviewWithDigestFooter.from, f.interviewWithDigestFooter.body), false, 'Interview with digest footer retained');
+  assertTrackerEqual(shouldSkipMessage(f.nextRoundHiringProcessUpdate.subject, f.nextRoundHiringProcessUpdate.from, f.nextRoundHiringProcessUpdate.body), false, 'Next-round hiring-process update retained');
   assertTrackerEqual(shouldSkipMessage(f.admissionsJobApplication.subject, f.admissionsJobApplication.from, f.admissionsJobApplication.body), false, 'Admissions job application retained');
   assertTrackerEqual(shouldSkipMessage(f.indeedInviteDigestNoise.subject, f.indeedInviteDigestNoise.from, f.indeedInviteDigestNoise.body), true, 'Indeed invite digest skipped');
   assertTrackerEqual(shouldSkipMessage(f.cgiNjoynConfirmation.subject, f.cgiNjoynConfirmation.from, f.cgiNjoynConfirmation.body), false, 'CGI Njoyn confirmation retained');
@@ -280,6 +304,9 @@ function runTrackerTests() {
   assertTrackerEqual(JobUtils.extractJobTitle(f.malformedTitle.subject, f.malformedTitle.body, f.malformedTitle.from, ''), f.malformedTitle.title, 'reject malformed title');
   assertTrackerEqual(StatusUtils.determineStatus(f.interview.subject, f.interview.body, ''), f.interview.status, 'interview status');
   assertTrackerEqual(StatusUtils.determineStatus(f.rejection.subject, f.rejection.body, ''), f.rejection.status, 'rejection status');
+  assertTrackerEqual(StatusUtils.determineStatus(f.rejectionWithDigestFooter.subject, f.rejectionWithDigestFooter.body, ''), f.rejectionWithDigestFooter.status, 'rejection with digest footer status');
+  assertTrackerEqual(StatusUtils.determineStatus(f.interviewWithDigestFooter.subject, f.interviewWithDigestFooter.body, ''), f.interviewWithDigestFooter.status, 'interview with digest footer status');
+  assertTrackerEqual(StatusUtils.determineStatus(f.nextRoundHiringProcessUpdate.subject, f.nextRoundHiringProcessUpdate.body, ''), f.nextRoundHiringProcessUpdate.status, 'next round hiring process is not rejection');
   assertTrackerEqual(getBatchSize(), SCAN_CONFIG.batchSize, 'batch size');
   assertTrackerEqual(getHigherPriorityStatus('Offer Received', 'Status Update'), 'Offer Received', 'status never downgrades');
   assertTrackerEqual(getHigherPriorityStatus('Applied', 'Interview Request'), 'Interview Request', 'status upgrades');
@@ -319,6 +346,12 @@ function runTrackerTests() {
   
   assertTrackerEqual(mockGeminiRes.threadId, 't1', 'Mock thread mapping verified');
   assertTrackerEqual(mockGeminiRes.isJobRelated, true, 'Mock job relation mapping verified');
+  assertTrackerEqual(mapGeminiCategoryToTrackerStatus_('RESPONSE'), 'Response', 'Gemini RESPONSE maps to tracker Response');
+  const geminiPayload = buildGeminiClassificationPayload_([{ idx: '001', f: 'Thomas Maerz <maerz.thomas@gmail.com>', s: 'Accepted: Interview', sn: 'Accepted interview invitation.', pc: 'Acme', pt: 'Project Manager' }]);
+  const geminiInstruction = geminiPayload.contents[0].parts[0].text;
+  assertTrackerEqual(geminiInstruction.indexOf('- RESPONSE:') !== -1, true, 'Gemini prompt defines RESPONSE');
+  assertTrackerEqual(geminiInstruction.indexOf('RESPONSE Boundary') !== -1, true, 'Gemini prompt guards RESPONSE boundary');
+  assertTrackerEqual(geminiPayload.generationConfig.responseSchema.properties.results.items.properties.cat.enum.indexOf('RESPONSE') !== -1, true, 'Gemini schema permits RESPONSE');
 
   return 'All tracker tests passed';
 }
