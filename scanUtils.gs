@@ -224,7 +224,7 @@ function hasLinkedInRecruiterMessageSignal_(combinedLower, fromLower) {
 }
 
 function hasUniversityAdmissionsNoiseSignal_(combinedLower, fromLower) {
-  const educationSender = containsAny_(fromLower, ['admissions@', 'student', 'registrar']) ||
+  const educationSender = containsAny_(fromLower, ['admissions@', 'registrar']) ||
     containsAny_(fromLower + ' ' + combinedLower, ['university admissions', 'college admissions']);
   return educationSender && containsAny_(combinedLower, ['thank you for applying to', 'your application to', 'your application has been received', 'application has been received', 'application was received', 'admissions team']);
 }
@@ -352,7 +352,7 @@ function classifyRegexDecision(subject, from, bodyOrSnippet) {
   if (isSecurityAccountNoise) return { skip: true, reason: 'security_account_noise', confidence: 'high' };
   if (isFinanceHousingStudentApplicationNoise) return { skip: true, reason: 'finance_housing_student_application_noise', confidence: 'high' };
   if (isGovernmentNonJobApplication) return { skip: true, reason: 'government_non_job_application', confidence: 'high' };
-  if (isEducationCertificationNoise || (isUniversityAdmissionsNoise && (!hasRoleAtEmployerPattern || (!hasSpecificApplicationPipelineSignal && !hasReferralSignal && !hasRejectionSignal && !hasInterviewOrAssessmentSignal && !hasCandidatePortalSignal && !hasApplicationOtpSignal)))) return { skip: true, reason: 'education_certification_noise', confidence: 'high' };
+  if (isEducationCertificationNoise || (isUniversityAdmissionsNoise && (!hasRoleAtEmployerPattern || (!hasApplicationSignal && !hasSpecificApplicationPipelineSignal && !hasReferralSignal && !hasRejectionSignal && !hasInterviewOrAssessmentSignal && !hasCandidatePortalSignal && !hasApplicationOtpSignal)))) return { skip: true, reason: 'education_certification_noise', confidence: 'high' };
   if (isConsumerAccountNoise) return { skip: true, reason: 'consumer_account_noise', confidence: 'high' };
 
   if (lowerSubject.indexOf('your application was sent to') !== -1) return { skip: false, reason: 'linkedin_application_sent', confidence: 'high' };
