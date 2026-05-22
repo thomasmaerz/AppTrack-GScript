@@ -87,7 +87,15 @@ function getStatusUpdateDecision(currentStatus, currentDateUpdated, candidateSta
 }
 
 function normalizeAuditText_(text) {
-  return String(text || '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
+  return String(text || '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function containsAny_(text, phrases) {
@@ -98,6 +106,132 @@ function containsAny_(text, phrases) {
 function isSpecificLinkedInApplicationSubject_(subjectLower) {
   return subjectLower.indexOf('your application was sent to') !== -1 ||
     /^\s*your application (?:to|for) .+ at .+/i.test(subjectLower);
+}
+
+function containsPattern_(text, pattern) { return pattern.test(String(text || '').toLowerCase()); }
+
+function hasBulkJobDigestSignal_(subjectLower, combinedLower) {
+  return containsPattern_(subjectLower, /\b\d+\s+more\s+(?:new\s+)?jobs\b/) ||
+    containsPattern_(subjectLower, /\+\s*\d+\s+(?:new\s+)?jobs\b/) ||
+    containsPattern_(subjectLower, /\bapply to .+ and more\b/) ||
+    containsAny_(combinedLower, [
+      'job alert', 'jobs you may be interested', 'jobs similar to', 'explore more jobs below',
+      'jobs are based on your preferences', 'based on your profile and preferences',
+      'matched your search', 'search agent', 'every 7 days', 'is hiring for',
+      'this job is a match', 'new job opportunities', 'new jobs posted from', 'weekly application update',
+      'new application updates', 'profile viewed'
+    ]);
+}
+
+function hasCareerMarketingSignal_(combinedLower) {
+  return containsAny_(combinedLower, [
+    'career advice', 'interview prep', 'interview preparation', 'interview questions',
+    'hiring process & culture', 'learn about the mastercard hiring process', 'learn about the hiring process',
+    'exploring your next move', 'career chatbot', 'ai chatbot', 'browse jobs', 'browsing jobs',
+    'job matches', 'resources about our hiring process', 'never applying to jobs manually',
+    'free plan', 'daily market scanning', 'resume keyword', 'keywords in resume suggestion',
+    'rate your experience', 'share your recent experience', 'survey', 'feedback request'
+  ]);
+}
+
+function hasNonEmploymentApplicationObject_(combinedLower) {
+  return containsAny_(combinedLower, [
+    'social insurance number', ' sin ', ' nas ', 'passport', 'reisepass', 'consulate',
+    'income support', 'financial aid', 'loan application', 'credit card application',
+    'housing application', 'student portal', 'student application', 'admission decision', 'admissions application',
+    'office of admissions', 'graduation application', 'pmp application', 'certification application',
+    'road test', 'driver examiner', 'oauth application', 'third-party oauth', 'third-party github application'
+  ]);
+}
+
+function hasTransactionalApplicationSignal_(combinedLower) {
+  return containsAny_(combinedLower, [
+    'your application has been submitted', 'your application was submitted', 'your application was sent',
+    'application has been submitted', 'application submitted', 'application was sent',
+    'we received your application', 'we have received your application', 'application received',
+    'application has been received', 'thank you for applying', 'thank you for your application',
+    'thank you for submitting your application', 'confirmation of your application',
+    'successfully applied', 'successfully submitted', 'confirm the receipt of your resume',
+    'receipt of your resume in response to the job opportunity', 'thank you for your application to the position',
+    'we value your application', 'our talent acquisition team is currently reviewing it',
+    'we have received your application for our', 'thank you for your interest in the'
+  ]);
+}
+
+function hasSpecificApplicationPipelineSignal_(subjectLower, combinedLower) {
+  return isSpecificLinkedInApplicationSubject_(subjectLower) ||
+    containsPattern_(combinedLower, /your application (?:to|for) .+ (?:has been received|has been submitted|was submitted|was sent|has an update|is under review|is being reviewed)/i);
+}
+
+function hasRoleAtEmployerPattern_(subjectLower, combinedLower) {
+  return containsPattern_(subjectLower, /your application (?:to|for) .+ at .+/i) ||
+    containsPattern_(combinedLower, /your application (?:to|for) .+ at .+/i);
+}
+
+function hasRejectionSignal_(combinedLower) {
+  return containsAny_(combinedLower, [
+    'not moving forward', 'not be moving forward', 'will not be moving forward',
+    'will not be proceeding', 'not be proceeding', 'pursue other candidates',
+    'proceed with other candidates', 'move forward with other candidates',
+    'position has been filled', 'regret to inform', 'no longer being considered',
+    'not successful', 'selected another candidate', 'more closely aligned',
+    'going in a different direction'
+  ]);
+}
+
+function hasInterviewOrAssessmentSignal_(combinedLower) {
+  return containsAny_(combinedLower, [
+    'interview scheduling', 'interview request', 'schedule your interview', 'schedule an interview',
+    'invitation to interview', 'phone interview invitation', 'discuss your application further',
+    'schedule a brief introductory meeting', 'moved to the next step of our hiring',
+    'selected for the next round of our hiring process', 'next round of our hiring process',
+    'moving forward with', 'previous hiring step', 'coding challenge', 'technical challenge',
+    'skills assessment', 'assessment', 'take-home', 'take home'
+  ]);
+}
+
+function hasApplicationOtpWorkflow_(combinedLower) {
+  if (containsAny_(combinedLower, ['access your candidate application account', 'candidate account one-time passcode', 'candidate account security code'])) return false;
+  return containsAny_(combinedLower, ['security code', 'verification code', 'one-time passcode', 'one-time-passcode', 'one-time password', 'one-time code']) &&
+    containsAny_(combinedLower, ['your application', 'resubmit your application', 'complete your job application', 'job application']) &&
+    !hasNonEmploymentApplicationObject_(combinedLower);
+}
+
+function isLikelySelfSent_(fromLower) {
+  if (fromLower.indexOf('thomas maerz') !== -1 || fromLower.indexOf('maerz.thomas@gmail.com') !== -1) return true;
+  const emailMatch = String(fromLower || '').match(/<([^>]+)>/);
+  const senderEmail = (emailMatch ? emailMatch[1] : String(fromLower || '')).trim();
+  const localPart = senderEmail.split('@')[0] || '';
+  return localPart.indexOf('thomas.maerz') !== -1 || localPart.indexOf('maerz.thomas') !== -1;
+}
+
+function hasSelfSentRecruitingResponse_(combinedLower, fromLower) {
+  if (!isLikelySelfSent_(fromLower)) return false;
+  if (containsAny_(combinedLower, ['resume feedback', 'cover letter feedback', 'provide feedback', 'job prospects', 'alberta supports', 'graduation application'])) return false;
+  return containsAny_(combinedLower, [
+    'attached my resume', 'resume ahead of our call', 'resume for the', 'i have applied for',
+    'i am writing to express', 'thank you for reaching out', 'application follow-up',
+    'position at', 'role at', 'interview invitation', 'accepted:', 'new time proposed:'
+  ]);
+}
+
+function hasDirectRecruiterOutreachSignal_(combinedLower) {
+  return containsAny_(combinedLower, ['immediate hiring', 'contract opportunity', 'came across your profile', 'saw your profile', 'send your resume', 'forward your resume', 'presenting your profile', 'profile to our client']);
+}
+
+function hasLinkedInRecruiterMessageSignal_(combinedLower, fromLower) {
+  return (fromLower.indexOf('inmail-hit-reply@linkedin.com') !== -1 || fromLower.indexOf('hit-reply@linkedin.com') !== -1 || fromLower.indexOf('messaging-digest-noreply@linkedin.com') !== -1) && containsAny_(combinedLower, ['opportunity', 'recruiter', 'role', 'position', 'resume', 'client', 'hiring']);
+}
+
+function hasUniversityAdmissionsNoiseSignal_(combinedLower, fromLower) {
+  const educationSender = containsAny_(fromLower, ['admissions@', 'student', 'registrar']) ||
+    containsAny_(fromLower + ' ' + combinedLower, ['university admissions', 'college admissions']);
+  return educationSender && containsAny_(combinedLower, ['thank you for applying to', 'your application to', 'your application has been received', 'application has been received', 'application was received', 'admissions team']);
+}
+
+function hasCandidatePortalWorkflow_(combinedLower) {
+  return containsAny_(combinedLower, ['candidate profile', 'candidate account', 'career site account', 'complete your application', 'complete your job application', 'saved a draft of your job application']) &&
+    containsAny_(combinedLower, ['interview', 'next steps', 'application', 'referral', 'position', 'role', 'recruiting', 'hiring']);
 }
 
 function buildGmailSearchQuery(mode, window) {
@@ -178,14 +312,21 @@ function classifyRegexDecision(subject, from, bodyOrSnippet) {
   const combined = lowerSubject + ' ' + lowerBody + ' ' + fromLower;
   const hasSpecificLinkedInApplicationSubject = isSpecificLinkedInApplicationSubject_(lowerSubject);
   const hasReferralSignal = containsAny_(combined, ['you have been referred', 'referred to a job']);
-  const hasStrongNonOtpJobProcessSignal = containsAny_(combined, [
-    'interview', 'assessment', 'application submitted', 'application received',
-    'your application was sent', 'thank you for applying', 'referred to a job'
-  ]);
+  const hasApplicationSignal = hasTransactionalApplicationSignal_(combined);
+  const hasSpecificApplicationPipelineSignal = hasSpecificApplicationPipelineSignal_(lowerSubject, combined);
+  const hasDirectRecruiterOutreachSignal = hasDirectRecruiterOutreachSignal_(combined);
+  const hasLinkedInRecruiterMessageSignal = hasLinkedInRecruiterMessageSignal_(combined, fromLower);
+  const hasRoleAtEmployerPattern = hasRoleAtEmployerPattern_(lowerSubject, combined);
+  const hasRejectionSignal = hasRejectionSignal_(combined);
+  const hasInterviewOrAssessmentSignal = hasInterviewOrAssessmentSignal_(combined);
+  const hasCandidatePortalSignal = hasCandidatePortalWorkflow_(combined);
+  const hasApplicationOtpSignal = hasApplicationOtpWorkflow_(combined);
+  const hasActivePipelineSignal = hasApplicationSignal || hasSpecificApplicationPipelineSignal || hasReferralSignal || hasRejectionSignal_(combined) || hasInterviewOrAssessmentSignal_(combined) || hasCandidatePortalWorkflow_(combined) || hasDirectRecruiterOutreachSignal || hasLinkedInRecruiterMessageSignal;
   const hasOtpSignal = containsAny_(combined, ['security code', 'verification code', 'one-time passcode', 'one-time-passcode', 'one-time password', 'one-time code']);
   const isSecurityAccountNoise = containsAny_(combined, ['oauth application', 'third-party oauth', 'third-party github application', 'security alert', 'authorized to access your github account', 'apps connected to your account']);
   const isGovernmentNonJobApplication = containsAny_(combined, ['social insurance number', ' sin ', ' nas ', 'passport', 'reisepass', 'consulate', 'income support']);
-  const isEducationCertificationNoise = containsAny_(combined, ['pmp application', 'certification application', 'course brochure', 'program advisor', 'graduate programs', 'admissions', 'graduation application']);
+  const isEducationCertificationNoise = containsAny_(combined, ['pmp application', 'certification application', 'course brochure', 'program advisor', 'graduate programs', 'admissions application', 'graduation application', 'office of admissions', 'admission decision']);
+  const isUniversityAdmissionsNoise = hasUniversityAdmissionsNoiseSignal_(combined, fromLower);
   const isConsumerAccountNoise = containsAny_(combined, ['billing statement', 'statement is now available', 'tax slip', 'insurance quote', 'road test', 'triangle rewards', 'bonus ct money']);
   const isFinanceHousingStudentApplicationNoise = containsAny_(combined, ['financial aid', 'loan application', 'credit card application', 'housing application', 'student portal', 'student application']);
   const isNewsletterNoise = domain.indexOf('substack') !== -1 ||
@@ -208,25 +349,33 @@ function classifyRegexDecision(subject, from, bodyOrSnippet) {
   ];
   const isRecruitmentDomain = recruitmentDomains.some(d => domain === d || domain.endsWith('.' + d));
 
+  if (isSecurityAccountNoise) return { skip: true, reason: 'security_account_noise', confidence: 'high' };
+  if (isFinanceHousingStudentApplicationNoise) return { skip: true, reason: 'finance_housing_student_application_noise', confidence: 'high' };
+  if (isGovernmentNonJobApplication) return { skip: true, reason: 'government_non_job_application', confidence: 'high' };
+  if (isEducationCertificationNoise || (isUniversityAdmissionsNoise && (!hasRoleAtEmployerPattern || (!hasSpecificApplicationPipelineSignal && !hasReferralSignal && !hasRejectionSignal && !hasInterviewOrAssessmentSignal && !hasCandidatePortalSignal && !hasApplicationOtpSignal)))) return { skip: true, reason: 'education_certification_noise', confidence: 'high' };
+  if (isConsumerAccountNoise) return { skip: true, reason: 'consumer_account_noise', confidence: 'high' };
+
   if (lowerSubject.indexOf('your application was sent to') !== -1) return { skip: false, reason: 'linkedin_application_sent', confidence: 'high' };
   if (hasSpecificLinkedInApplicationSubject) return { skip: false, reason: 'specific_application_update', confidence: 'high' };
-  if (isFinanceHousingStudentApplicationNoise) return { skip: true, reason: 'finance_housing_student_application_noise', confidence: 'high' };
   if (hasReferralSignal) return { skip: false, reason: 'referral', confidence: 'high' };
-  if (isSecurityAccountNoise) return { skip: true, reason: 'security_account_noise', confidence: 'high' };
-  if (isGovernmentNonJobApplication) return { skip: true, reason: 'government_non_job_application', confidence: 'high' };
-  if (isEducationCertificationNoise) return { skip: true, reason: 'education_certification_noise', confidence: 'high' };
-  if (isConsumerAccountNoise) return { skip: true, reason: 'consumer_account_noise', confidence: 'high' };
-  if (hasOtpSignal && !hasStrongNonOtpJobProcessSignal) return { skip: true, reason: 'otp_noise', confidence: 'high' };
-  if (isNewsletterNoise) return { skip: true, reason: 'newsletter_noise', confidence: 'high' };
-  if (containsAny_(combined, ['not moving forward', 'pursue other candidates', 'position has been filled', 'regret to inform', 'no longer being considered'])) return { skip: false, reason: 'rejection_signal', confidence: 'high' };
-  if (containsAny_(combined, ['interview scheduling', 'interview request', 'schedule your interview', 'invitation to interview'])) return { skip: false, reason: 'interview_signal', confidence: 'high' };
-  if (containsAny_(combined, ['thank you for applying', 'we received your application', 'application received', 'successfully applied', 'regarding your application', 'update on your application'])) return { skip: false, reason: 'application_transactional_signal', confidence: 'high' };
-  if (containsAny_(combined, ['immediate hiring', 'contract opportunity', 'came across your profile', 'saw your profile', 'send your resume', 'forward your resume', 'presenting your profile', 'profile to our client'])) return { skip: false, reason: 'direct_recruiter_outreach', confidence: 'high' };
-  if ((fromLower.indexOf('inmail-hit-reply@linkedin.com') !== -1 || fromLower.indexOf('hit-reply@linkedin.com') !== -1 || fromLower.indexOf('messaging-digest-noreply@linkedin.com') !== -1) && containsAny_(combined, ['opportunity', 'recruiter', 'role', 'position', 'resume', 'client', 'hiring'])) return { skip: false, reason: 'linkedin_recruiter_message', confidence: 'medium' };
 
-  if (fromLower.indexOf('jobs-listings') !== -1 || fromLower.indexOf('jobalerts-noreply') !== -1 || (fromLower.indexOf('jobs-noreply') !== -1 && !isSpecificLinkedInApplicationSubject_(lowerSubject))) {
-    if (containsAny_(combined, ['weekly application update', 'new application updates', 'job alert', 'jobs you may be interested', 'jobs similar to', 'apply now', 'viewed by', 'premium', 'upgrade', 'digest'])) return { skip: true, reason: 'job_board_digest_noise', confidence: 'high' };
-  }
+  if (hasBulkJobDigestSignal_(lowerSubject, combined) && !hasActivePipelineSignal) return { skip: true, reason: 'job_board_digest_noise', confidence: 'high' };
+  if ((isNewsletterNoise || hasCareerMarketingSignal_(combined)) && !hasActivePipelineSignal) return { skip: true, reason: 'career_marketing_noise', confidence: 'high' };
+  if (containsAny_(combined, ['community membership', 'ctocraft', 'ctocraft community', 'slack invitation']) && !hasActivePipelineSignal) return { skip: true, reason: 'professional_community_noise', confidence: 'high' };
+  if (containsAny_(combined, ['job placement coach', 'employment counsellor', 'workbc', 'mcg careers', 'hidden job market workshop']) && !hasActivePipelineSignal) return { skip: true, reason: 'career_services_noise', confidence: 'high' };
+
+  if (hasApplicationOtpSignal) return { skip: false, reason: 'application_verification_workflow', confidence: 'medium' };
+  if (hasOtpSignal && !hasApplicationOtpSignal) return { skip: true, reason: 'otp_noise', confidence: 'high' };
+  if (hasRejectionSignal) return { skip: false, reason: 'rejection_signal', confidence: 'high' };
+  if (hasInterviewOrAssessmentSignal) return { skip: false, reason: 'interview_or_assessment_signal', confidence: 'high' };
+  if (hasSpecificApplicationPipelineSignal) return { skip: false, reason: 'specific_application_update', confidence: 'high' };
+  if (hasApplicationSignal) return { skip: false, reason: 'application_transactional_signal', confidence: 'high' };
+  if (hasCandidatePortalSignal) return { skip: false, reason: 'candidate_portal_workflow', confidence: 'medium' };
+  if (hasSelfSentRecruitingResponse_(combined, fromLower)) return { skip: false, reason: 'candidate_response', confidence: 'medium' };
+  if (hasDirectRecruiterOutreachSignal) return { skip: false, reason: 'direct_recruiter_outreach', confidence: 'high' };
+  if (hasLinkedInRecruiterMessageSignal) return { skip: false, reason: 'linkedin_recruiter_message', confidence: 'medium' };
+
+  if (fromLower.indexOf('jobs-listings') !== -1 || fromLower.indexOf('jobalerts-noreply') !== -1 || (fromLower.indexOf('jobs-noreply') !== -1 && !isSpecificLinkedInApplicationSubject_(lowerSubject))) return { skip: true, reason: 'job_board_digest_noise', confidence: 'high' };
   if (isRecruitmentDomain && containsAny_(combined, ['application', 'interview', 'assessment', 'candidacy', 'candidate', 'recruiting', 'hiring'])) return { skip: false, reason: 'trusted_recruiting_domain', confidence: 'medium' };
   if (isHighConfidenceSubject_(lowerSubject)) return { skip: false, reason: 'high_confidence_subject', confidence: 'medium' };
 
