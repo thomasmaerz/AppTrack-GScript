@@ -195,6 +195,12 @@ const TestFixtures = {
     body: 'Your application to Director of Admissions at Acme University has been received by the hiring team.',
     skip: false
   },
+  universityEmployerApplicationFromAdmissionsSender: {
+    subject: 'Your application to Director of Admissions at Acme University has been received',
+    from: 'Acme Admissions <admissions@acme.edu>',
+    body: 'Your application to Director of Admissions at Acme University has been received by the hiring team for review.',
+    skip: false
+  },
   indeedInviteDigestNoise: {
     subject: 'IT Applications Manager at Durabuilt Windows and Doors in Edmonton, AB and 8 more new jobs',
     from: 'Indeed <invitetoapply@match.indeed.com>',
@@ -260,6 +266,12 @@ const TestFixtures = {
     from: 'Thomas Maerz <maerz.thomas@gmail.com>',
     body: 'Would you please review my resume and cover letter to provide feedback for the position I am applying for?',
     skip: true
+  },
+  userSentResumeAliasAddress: {
+    subject: 'Resume follow-up for Senior Project Manager role',
+    from: 'Thomas Maerz <thomas.maerz+jobs@gmail.com>',
+    body: 'Hi Jenn, following up and sharing my resume for the Senior Project Manager role with your client.',
+    skip: false
   }
 };
 
@@ -298,6 +310,7 @@ function runTrackerTests() {
   assertTrackerEqual(shouldSkipMessage(f.interviewWithDigestFooter.subject, f.interviewWithDigestFooter.from, f.interviewWithDigestFooter.body), false, 'Interview with digest footer retained');
   assertTrackerEqual(shouldSkipMessage(f.nextRoundHiringProcessUpdate.subject, f.nextRoundHiringProcessUpdate.from, f.nextRoundHiringProcessUpdate.body), false, 'Next-round hiring-process update retained');
   assertTrackerEqual(shouldSkipMessage(f.admissionsJobApplication.subject, f.admissionsJobApplication.from, f.admissionsJobApplication.body), false, 'Admissions job application retained');
+  assertTrackerEqual(shouldSkipMessage(f.universityEmployerApplicationFromAdmissionsSender.subject, f.universityEmployerApplicationFromAdmissionsSender.from, f.universityEmployerApplicationFromAdmissionsSender.body), false, 'University employer application from admissions sender retained');
   assertTrackerEqual(shouldSkipMessage(f.indeedInviteDigestNoise.subject, f.indeedInviteDigestNoise.from, f.indeedInviteDigestNoise.body), true, 'Indeed invite digest skipped');
   assertTrackerEqual(shouldSkipMessage(f.cgiNjoynConfirmation.subject, f.cgiNjoynConfirmation.from, f.cgiNjoynConfirmation.body), false, 'CGI Njoyn confirmation retained');
   assertTrackerEqual(shouldSkipMessage(f.cgiIndeedDigestNoise.subject, f.cgiIndeedDigestNoise.from, f.cgiIndeedDigestNoise.body), true, 'CGI Indeed digest skipped');
@@ -308,6 +321,7 @@ function runTrackerTests() {
   assertTrackerEqual(shouldSkipMessage(f.candidateProfileBeforeInterview.subject, f.candidateProfileBeforeInterview.from, f.candidateProfileBeforeInterview.body), false, 'Candidate profile before interview retained');
   assertTrackerEqual(shouldSkipMessage(f.applicationOtpResubmit.subject, f.applicationOtpResubmit.from, f.applicationOtpResubmit.body), false, 'Application OTP resubmit retained');
   assertTrackerEqual(shouldSkipMessage(f.userSentResumeToRecruiter.subject, f.userSentResumeToRecruiter.from, f.userSentResumeToRecruiter.body), false, 'User sent recruiter resume retained');
+  assertTrackerEqual(shouldSkipMessage(f.userSentResumeAliasAddress.subject, f.userSentResumeAliasAddress.from, f.userSentResumeAliasAddress.body), false, 'User sent recruiter resume from alias retained');
   assertTrackerEqual(shouldSkipMessage(f.userSentResumeFeedbackNoise.subject, f.userSentResumeFeedbackNoise.from, f.userSentResumeFeedbackNoise.body), true, 'User sent resume feedback skipped');
   assertTrackerEqual(StatusUtils.determineStatus(f.immediateHiringRecruiter.subject, f.immediateHiringRecruiter.body, ''), f.immediateHiringRecruiter.status, 'Recruiter outreach status');
   assertTrackerEqual(StatusUtils.determineStatus(f.recruiterFollowUp.subject, f.recruiterFollowUp.body, ''), f.recruiterFollowUp.status, 'Recruiter follow-up status');

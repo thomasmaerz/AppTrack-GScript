@@ -163,6 +163,11 @@ function hasSpecificApplicationPipelineSignal_(subjectLower, combinedLower) {
     containsPattern_(combinedLower, /your application (?:to|for) .+ (?:has been received|has been submitted|was submitted|was sent|has an update|is under review|is being reviewed)/i);
 }
 
+function hasRoleAtEmployerPattern_(subjectLower, combinedLower) {
+  return containsPattern_(subjectLower, /your application (?:to|for) .+ at .+/i) ||
+    containsPattern_(combinedLower, /your application (?:to|for) .+ at .+/i);
+}
+
 function hasRejectionSignal_(combinedLower) {
   return containsAny_(combinedLower, [
     'not moving forward', 'not be moving forward', 'will not be moving forward',
@@ -193,7 +198,11 @@ function hasApplicationOtpWorkflow_(combinedLower) {
 }
 
 function isLikelySelfSent_(fromLower) {
-  return fromLower.indexOf('maerz.thomas@gmail.com') !== -1 || fromLower.indexOf('thomas maerz') !== -1;
+  if (fromLower.indexOf('thomas maerz') !== -1 || fromLower.indexOf('maerz.thomas@gmail.com') !== -1) return true;
+  const emailMatch = String(fromLower || '').match(/<([^>]+)>/);
+  const senderEmail = (emailMatch ? emailMatch[1] : String(fromLower || '')).trim();
+  const localPart = senderEmail.split('@')[0] || '';
+  return localPart.indexOf('thomas.maerz') !== -1 || localPart.indexOf('maerz.thomas') !== -1;
 }
 
 function hasSelfSentRecruitingResponse_(combinedLower, fromLower) {
@@ -307,6 +316,11 @@ function classifyRegexDecision(subject, from, bodyOrSnippet) {
   const hasSpecificApplicationPipelineSignal = hasSpecificApplicationPipelineSignal_(lowerSubject, combined);
   const hasDirectRecruiterOutreachSignal = hasDirectRecruiterOutreachSignal_(combined);
   const hasLinkedInRecruiterMessageSignal = hasLinkedInRecruiterMessageSignal_(combined, fromLower);
+  const hasRoleAtEmployerPattern = hasRoleAtEmployerPattern_(lowerSubject, combined);
+  const hasRejectionSignal = hasRejectionSignal_(combined);
+  const hasInterviewOrAssessmentSignal = hasInterviewOrAssessmentSignal_(combined);
+  const hasCandidatePortalSignal = hasCandidatePortalWorkflow_(combined);
+  const hasApplicationOtpSignal = hasApplicationOtpWorkflow_(combined);
   const hasActivePipelineSignal = hasApplicationSignal || hasSpecificApplicationPipelineSignal || hasReferralSignal || hasRejectionSignal_(combined) || hasInterviewOrAssessmentSignal_(combined) || hasCandidatePortalWorkflow_(combined) || hasDirectRecruiterOutreachSignal || hasLinkedInRecruiterMessageSignal;
   const hasOtpSignal = containsAny_(combined, ['security code', 'verification code', 'one-time passcode', 'one-time-passcode', 'one-time password', 'one-time code']);
   const isSecurityAccountNoise = containsAny_(combined, ['oauth application', 'third-party oauth', 'third-party github application', 'security alert', 'authorized to access your github account', 'apps connected to your account']);
@@ -338,7 +352,7 @@ function classifyRegexDecision(subject, from, bodyOrSnippet) {
   if (isSecurityAccountNoise) return { skip: true, reason: 'security_account_noise', confidence: 'high' };
   if (isFinanceHousingStudentApplicationNoise) return { skip: true, reason: 'finance_housing_student_application_noise', confidence: 'high' };
   if (isGovernmentNonJobApplication) return { skip: true, reason: 'government_non_job_application', confidence: 'high' };
-  if (isEducationCertificationNoise || isUniversityAdmissionsNoise) return { skip: true, reason: 'education_certification_noise', confidence: 'high' };
+  if (isEducationCertificationNoise || (isUniversityAdmissionsNoise && (!hasRoleAtEmployerPattern || (!hasSpecificApplicationPipelineSignal && !hasReferralSignal && !hasRejectionSignal && !hasInterviewOrAssessmentSignal && !hasCandidatePortalSignal && !hasApplicationOtpSignal)))) return { skip: true, reason: 'education_certification_noise', confidence: 'high' };
   if (isConsumerAccountNoise) return { skip: true, reason: 'consumer_account_noise', confidence: 'high' };
 
   if (lowerSubject.indexOf('your application was sent to') !== -1) return { skip: false, reason: 'linkedin_application_sent', confidence: 'high' };
@@ -350,13 +364,13 @@ function classifyRegexDecision(subject, from, bodyOrSnippet) {
   if (containsAny_(combined, ['community membership', 'ctocraft', 'ctocraft community', 'slack invitation']) && !hasActivePipelineSignal) return { skip: true, reason: 'professional_community_noise', confidence: 'high' };
   if (containsAny_(combined, ['job placement coach', 'employment counsellor', 'workbc', 'mcg careers', 'hidden job market workshop']) && !hasActivePipelineSignal) return { skip: true, reason: 'career_services_noise', confidence: 'high' };
 
-  if (hasApplicationOtpWorkflow_(combined)) return { skip: false, reason: 'application_verification_workflow', confidence: 'medium' };
-  if (hasOtpSignal && !hasApplicationOtpWorkflow_(combined)) return { skip: true, reason: 'otp_noise', confidence: 'high' };
-  if (hasRejectionSignal_(combined)) return { skip: false, reason: 'rejection_signal', confidence: 'high' };
-  if (hasInterviewOrAssessmentSignal_(combined)) return { skip: false, reason: 'interview_or_assessment_signal', confidence: 'high' };
+  if (hasApplicationOtpSignal) return { skip: false, reason: 'application_verification_workflow', confidence: 'medium' };
+  if (hasOtpSignal && !hasApplicationOtpSignal) return { skip: true, reason: 'otp_noise', confidence: 'high' };
+  if (hasRejectionSignal) return { skip: false, reason: 'rejection_signal', confidence: 'high' };
+  if (hasInterviewOrAssessmentSignal) return { skip: false, reason: 'interview_or_assessment_signal', confidence: 'high' };
   if (hasSpecificApplicationPipelineSignal) return { skip: false, reason: 'specific_application_update', confidence: 'high' };
   if (hasApplicationSignal) return { skip: false, reason: 'application_transactional_signal', confidence: 'high' };
-  if (hasCandidatePortalWorkflow_(combined)) return { skip: false, reason: 'candidate_portal_workflow', confidence: 'medium' };
+  if (hasCandidatePortalSignal) return { skip: false, reason: 'candidate_portal_workflow', confidence: 'medium' };
   if (hasSelfSentRecruitingResponse_(combined, fromLower)) return { skip: false, reason: 'candidate_response', confidence: 'medium' };
   if (hasDirectRecruiterOutreachSignal) return { skip: false, reason: 'direct_recruiter_outreach', confidence: 'high' };
   if (hasLinkedInRecruiterMessageSignal) return { skip: false, reason: 'linkedin_recruiter_message', confidence: 'medium' };
