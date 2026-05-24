@@ -53,13 +53,13 @@ function setupTriggers() {
   // Delete existing triggers
   const triggers = ScriptApp.getProjectTriggers();
   triggers.forEach(trigger => ScriptApp.deleteTrigger(trigger));
-  
+
   // Create daily trigger for scanning emails (combined function)
   ScriptApp.newTrigger('scanEmails')
     .timeBased()
     .everyDays(1)
     .create();
-    
+
   SpreadsheetApp.getActive().toast('Automatic daily scanning has been set up!');
 }
 
@@ -94,7 +94,7 @@ function getOrCreateSpreadsheet(spreadsheetId) {
       spreadsheet = SpreadsheetApp.create(SPREADSHEET_NAME);
     }
   }
-  
+
   const sheet = spreadsheet.getSheetByName("Applications");
 
   if (!sheet) {
@@ -178,7 +178,7 @@ function refreshVisualizations() {
 
   // Apply formatting first
   SpreadsheetUtils.enhanceSpreadsheetFormatting(sheet);
-  
+
   try {
     SpreadsheetUtils.createSummaryDashboard(sheet);
     SpreadsheetApp.getActive().toast('Visualizations refreshed successfully!');
@@ -911,11 +911,56 @@ function runBroadSearchGapAudit() {
   SpreadsheetApp.getActive().toast(`Gap audit complete! Found ${gapCount} potential missed emails in "Broad Search Gap Audit" tab!`);
 }
 
+const GEMINI_BROAD_GAP_CONFIG = {
+  maxRuntimeMs: 6 * 60 * 1000,
+  stopBufferMs: 30 * 1000,
+  classificationSafetyMs: 90 * 1000,
+  resumeDelayMs: 60 * 1000
+};
+
+const BROAD_GAP_LLM_HEADERS = [
+  "Thread ID", "Date", "From", "Subject", "Regex Decision", "Regex Reason", "Regex Confidence",
+  "Gemini Decision", "Gap Status", "Gemini Class", "Gemini Company", "Gemini Title",
+  "Gemini Reasoning", "Preparsed Company", "Preparsed Title", "Snippet"
+];
+
+function scheduleGeminiBroadGapResume_() {
+  deleteGapAuditTriggers();
+  ScriptApp.newTrigger('resumeGeminiBroadGapAudit')
+    .timeBased()
+    .after(GEMINI_BROAD_GAP_CONFIG.resumeDelayMs)
+    .create();
+}
+
 function runGeminiBroadGapAudit() {
+  return runGeminiBroadGapAuditWithLock_();
+}
+
+function resumeGeminiBroadGapAudit() {
+  Logger.log("Resuming Gemini Broad Gap Audit from trigger execution...");
+  return runGeminiBroadGapAuditWithLock_();
+}
+
+function runGeminiBroadGapAuditWithLock_() {
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(5000)) {
+    Logger.log('Gemini BroadGap audit is already running. Scheduling another resume.');
+    scheduleGeminiBroadGapResume_();
+    return;
+  }
+
+  try {
+    return runGeminiBroadGapAuditInternal_();
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function runGeminiBroadGapAuditInternal_() {
   const startTime = Date.now();
-  const maxRuntimeMs = 5 * 60 * 1000; // Safe timeout threshold (5 mins)
-  const stopBufferMs = 30 * 1000; // 30 second buffer
-  const classificationSafetyMs = 120 * 1000;
+  const maxRuntimeMs = GEMINI_BROAD_GAP_CONFIG.maxRuntimeMs;
+  const stopBufferMs = GEMINI_BROAD_GAP_CONFIG.stopBufferMs;
+  const classificationSafetyMs = GEMINI_BROAD_GAP_CONFIG.classificationSafetyMs;
   
   const spreadsheet = getOrCreateSpreadsheet();
   const scriptProperties = PropertiesService.getScriptProperties();
@@ -956,13 +1001,7 @@ function runGeminiBroadGapAudit() {
     // Check runtime budget
     if (Date.now() - startTime >= maxRuntimeMs - stopBufferMs) {
       Logger.log(`Nearing Apps Script execution timeout limit. Paused extraction at start index: ${extractionStart}. Scheduling background trigger...`);
-      
-      deleteGapAuditTriggers();
-      
-      ScriptApp.newTrigger('resumeGeminiBroadGapAudit')
-        .timeBased()
-        .after(60000) // Trigger in 1 minute
-        .create();
+      scheduleGeminiBroadGapResume_();
         
       try {
         SpreadsheetApp.getActive().toast(`Extraction paused at index ${extractionStart} to prevent timeout. Resuming automatically in background in 1 minute...`);
@@ -1022,20 +1061,12 @@ function runGeminiBroadGapAudit() {
 
   if (Date.now() - startTime >= maxRuntimeMs - stopBufferMs - classificationSafetyMs) {
     Logger.log('Extraction complete, but remaining runtime is unsafe for Gemini classification. Scheduling background trigger.');
-    ScriptApp.newTrigger('resumeGeminiBroadGapAudit')
-      .timeBased()
-      .after(60000)
-      .create();
+    scheduleGeminiBroadGapResume_();
     return;
   }
   
   Logger.log('Transitioning to Stage 2: Gemini LLM Classification...');
   runGeminiBroadGapClassification(spreadsheet, startTime, maxRuntimeMs, stopBufferMs, classificationSafetyMs);
-}
-
-function resumeGeminiBroadGapAudit() {
-  Logger.log("Resuming Gemini Broad Gap Audit from trigger execution...");
-  runGeminiBroadGapAudit();
 }
 
 function mapGeminiCategoryToTrackerStatus_(category) {
@@ -1057,11 +1088,56 @@ function mapGeminiCategoryToTrackerStatus_(category) {
   return classMap[category] || 'Noise';
 }
 
+function buildBroadGapLLMRow_(logItem, geminiRes) {
+  let geminiDecision = 'SKIP';
+  let isJobRelated = false;
+  let geminiClass = 'Noise';
+  let reasoning = 'No classification returned by model.';
+  let cleanCompany = 'Unlisted';
+  let cleanTitle = 'Unlisted';
+
+  if (geminiRes) {
+    isJobRelated = geminiRes.rel;
+    geminiDecision = isJobRelated ? 'PASS' : 'SKIP';
+    reasoning = geminiRes.rea;
+    cleanCompany = geminiRes.co || 'Unlisted';
+    cleanTitle = geminiRes.ti || 'Unlisted';
+
+    geminiClass = mapGeminiCategoryToTrackerStatus_(geminiRes.cat);
+  }
+
+  let gapStatus = 'MATCH';
+  if (logItem.regexDecision === 'SKIP' && geminiDecision === 'PASS') {
+    gapStatus = 'FALSE_SKIP';
+  } else if (logItem.regexDecision === 'PASS' && geminiDecision === 'SKIP') {
+    gapStatus = 'FALSE_PASS';
+  }
+
+  return [
+    logItem.threadId,
+    logItem.date,
+    logItem.from,
+    logItem.subject,
+    logItem.regexDecision,
+    logItem.regexReason,
+    logItem.regexConfidence,
+    geminiDecision,
+    gapStatus,
+    geminiClass,
+    cleanCompany,
+    cleanTitle,
+    reasoning,
+    logItem.preparsedCompany,
+    logItem.preparsedTitle,
+    logItem.snippet
+  ];
+}
+
 function runGeminiBroadGapClassification(spreadsheet, startTime, maxRuntimeMs, stopBufferMs, classificationSafetyMs) {
   startTime = startTime || Date.now();
-  maxRuntimeMs = maxRuntimeMs || (5 * 60 * 1000);
-  stopBufferMs = stopBufferMs || (30 * 1000);
-  classificationSafetyMs = classificationSafetyMs || (120 * 1000);
+  maxRuntimeMs = maxRuntimeMs || GEMINI_BROAD_GAP_CONFIG.maxRuntimeMs;
+  stopBufferMs = stopBufferMs || GEMINI_BROAD_GAP_CONFIG.stopBufferMs;
+  classificationSafetyMs = classificationSafetyMs || GEMINI_BROAD_GAP_CONFIG.classificationSafetyMs;
 
   const gapDbSheet = spreadsheet.getSheetByName("BroadSearchDB");
   if (!gapDbSheet || gapDbSheet.getLastRow() <= 1) {
@@ -1078,6 +1154,20 @@ function runGeminiBroadGapClassification(spreadsheet, startTime, maxRuntimeMs, s
 
   if (nextIndex > 0) {
     Logger.log(`Resuming Gemini classification from index ${nextIndex} of ${cachedData.length}.`);
+  }
+
+  let gapSheet = spreadsheet.getSheetByName("BroadGapLLM");
+  if (nextIndex > 0 && (!gapSheet || gapSheet.getLastRow() === 0)) {
+    Logger.log('Classification resume output sheet is missing or empty. Restarting BroadGapLLM output from the first cached record.');
+    nextIndex = 0;
+    scriptProperties.setProperty(nextIndexKey, '0');
+  }
+
+  if (!gapSheet) gapSheet = spreadsheet.insertSheet("BroadGapLLM");
+  if (nextIndex === 0) {
+    gapSheet.clear();
+    gapSheet.getRange(1, 1, 1, BROAD_GAP_LLM_HEADERS.length).setValues([BROAD_GAP_LLM_HEADERS]);
+    gapSheet.setFrozenRows(1);
   }
   
   const threadLogs = [];
@@ -1119,17 +1209,12 @@ function runGeminiBroadGapClassification(spreadsheet, startTime, maxRuntimeMs, s
     });
   }
   
-  const geminiMap = new Map();
   for (let i = 0; i < promptLogs.length; i += GEMINI_CONFIG.batchSize) {
     if (Date.now() - startTime >= maxRuntimeMs - stopBufferMs - classificationSafetyMs) {
       const resumeAt = nextIndex + i;
       scriptProperties.setProperty(nextIndexKey, String(resumeAt));
       Logger.log(`Nearing execution timeout. Pausing Gemini classification at index ${resumeAt} of ${cachedData.length}. Scheduling resume trigger...`);
-      deleteGapAuditTriggers();
-      ScriptApp.newTrigger('resumeGeminiBroadGapAudit')
-        .timeBased()
-        .after(60000)
-        .create();
+      scheduleGeminiBroadGapResume_();
       return;
     }
 
@@ -1137,21 +1222,27 @@ function runGeminiBroadGapClassification(spreadsheet, startTime, maxRuntimeMs, s
     Logger.log(`Sending batch ${Math.floor(i / GEMINI_CONFIG.batchSize) + 1} to Gemini (${batch.length} threads)...`);
     try {
       const results = GeminiClient.classifyBatch(batch);
+      const geminiMap = new Map();
       results.forEach(res => {
         const threadId = idxMap.get(res.idx);
         if (threadId) {
           geminiMap.set(threadId, res);
         }
       });
+
+      const batchThreadLogs = threadLogs.slice(i, i + batch.length);
+      const batchRows = batchThreadLogs.map(logItem => buildBroadGapLLMRow_(logItem, geminiMap.get(logItem.threadId)));
+      if (batchRows.length > 0) {
+        gapSheet.getRange(gapSheet.getLastRow() + 1, 1, batchRows.length, BROAD_GAP_LLM_HEADERS.length).setValues(batchRows);
+      }
+
+      const nextBatchIndex = nextIndex + i + batch.length;
+      scriptProperties.setProperty(nextIndexKey, String(nextBatchIndex));
     } catch (e) {
-      Logger.log("Error classifying batch: " + e.toString());
+      Logger.log("Error classifying or persisting batch: " + e.toString());
       const resumeAt = nextIndex + i;
       scriptProperties.setProperty(nextIndexKey, String(resumeAt));
-      deleteGapAuditTriggers();
-      ScriptApp.newTrigger('resumeGeminiBroadGapAudit')
-        .timeBased()
-        .after(60000)
-        .create();
+      scheduleGeminiBroadGapResume_();
       return;
     }
     
@@ -1160,80 +1251,11 @@ function runGeminiBroadGapClassification(spreadsheet, startTime, maxRuntimeMs, s
       Utilities.sleep(1000);
     }
   }
-  
-  // Formulate output columns
-  const auditData = [[
-    "Thread ID", "Date", "From", "Subject", "Regex Decision", "Regex Reason", "Regex Confidence",
-    "Gemini Decision", "Gap Status", "Gemini Class", "Gemini Company", "Gemini Title",
-    "Gemini Reasoning", "Preparsed Company", "Preparsed Title", "Snippet"
-  ]];
-  
-  for (const logItem of threadLogs) {
-    const geminiRes = geminiMap.get(logItem.threadId);
-    
-    let geminiDecision = 'SKIP';
-    let isJobRelated = false;
-    let geminiClass = 'Noise';
-    let reasoning = 'No classification returned by model.';
-    let cleanCompany = 'Unlisted';
-    let cleanTitle = 'Unlisted';
-    
-    if (geminiRes) {
-      isJobRelated = geminiRes.rel;
-      geminiDecision = isJobRelated ? 'PASS' : 'SKIP';
-      reasoning = geminiRes.rea;
-      cleanCompany = geminiRes.co || 'Unlisted';
-      cleanTitle = geminiRes.ti || 'Unlisted';
-      
-      geminiClass = mapGeminiCategoryToTrackerStatus_(geminiRes.cat);
-    }
-    
-    let gapStatus = 'MATCH';
-    if (logItem.regexDecision === 'SKIP' && geminiDecision === 'PASS') {
-      gapStatus = 'FALSE_SKIP';
-    } else if (logItem.regexDecision === 'PASS' && geminiDecision === 'SKIP') {
-      gapStatus = 'FALSE_PASS';
-    }
-    
-    auditData.push([
-      logItem.threadId,
-      logItem.date,
-      logItem.from,
-      logItem.subject,
-      logItem.regexDecision,
-      logItem.regexReason,
-      logItem.regexConfidence,
-      geminiDecision,
-      gapStatus,
-      geminiClass,
-      cleanCompany,
-      cleanTitle,
-      reasoning,
-      logItem.preparsedCompany,
-      logItem.preparsedTitle,
-      logItem.snippet
-    ]);
-  }
-  
-  // Format target comparison tab
-  let gapSheet = spreadsheet.getSheetByName("BroadGapLLM");
-  if (gapSheet && nextIndex === 0) {
-    gapSheet.clear();
-  } else {
-    if (!gapSheet) gapSheet = spreadsheet.insertSheet("BroadGapLLM");
-  }
 
-  if (nextIndex === 0) {
-    gapSheet.getRange(1, 1, auditData.length, auditData[0].length).setValues(auditData);
-  } else if (auditData.length > 1) {
-    const appendRows = auditData.slice(1);
-    gapSheet.getRange(gapSheet.getLastRow() + 1, 1, appendRows.length, appendRows[0].length).setValues(appendRows);
-  }
-
-  gapSheet.autoResizeColumns(1, auditData[0].length);
+  gapSheet.autoResizeColumns(1, BROAD_GAP_LLM_HEADERS.length);
   gapSheet.hideColumn(gapSheet.getRange(1, 1, 1, 1));
   
-  SpreadsheetUtils.formatGapLLMSheet(gapSheet, auditData.length);
+  SpreadsheetUtils.formatGapLLMSheet(gapSheet, gapSheet.getLastRow());
   scriptProperties.deleteProperty(nextIndexKey);
   deleteGapAuditTriggers();
   
@@ -1262,6 +1284,7 @@ function clearBroadSearchDB() {
   // Clear Script Properties
   const scriptProperties = PropertiesService.getScriptProperties();
   scriptProperties.deleteProperty('gap_extraction_start');
+  scriptProperties.deleteProperty('gap_classification_next_index');
   
   // Clear triggers
   deleteGapAuditTriggers();
