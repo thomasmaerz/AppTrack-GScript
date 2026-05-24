@@ -60,9 +60,18 @@ const CompanyUtils = {
       const candidate = linkedInSentLineMatch[1].replace(/\b(View application|Job ID|Reference|Unsubscribe).*$/i, '').trim();
       if (candidate && candidate.length <= 80 && !this.isLikelyNotCompany(candidate)) return candidate;
     }
+    const linkedInViewedLineMatch = lineAwareText.match(/(?:^|\n)\s*your application was viewed by\s+([^\n]+)/i);
+    if (linkedInViewedLineMatch && linkedInViewedLineMatch[1]) {
+      const candidate = linkedInViewedLineMatch[1]
+        .replace(/\.\s+(This email|View application|Job ID|Reference|Unsubscribe).*$/i, '')
+        .replace(/\b(This email|View application|Job ID|Reference|Unsubscribe).*$/i, '')
+        .trim();
+      if (candidate && candidate.length <= 80 && !this.isLikelyNotCompany(candidate)) return candidate;
+    }
     const combinedText = normalizeParserText_(subject + ' ' + body);
     const deterministicCompanyPatterns = [
       /your application was sent to\s+([^\n.]+)/i,
+      /your application was viewed by\s+(.+?)(?:\.|$)/i,
       /your application (?:to|for)\s+.+?\s+at\s+([^\n.]+)/i,
       /thank you for applying to\s+([^\n.]+)/i,
       /for applying to\s+([^\n.]+)/i,

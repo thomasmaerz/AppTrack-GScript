@@ -94,6 +94,12 @@ The scanner now separates fast ingestion from dashboard refreshes, processes a f
 - Targeted parsing for LinkedIn and Rogers/SuccessFactors-style confirmations
 - Corrected status priority: offer → interview → assessment → rejection → applied/status update
 
+Classification policy:
+- Production uses deterministic regex/rule classification only.
+- Gemini is audit-only.
+- PASS includes submitted applications, specific application status updates, interviews, assessments, offers, rejections, referrals, user-sent application/recruiter responses, and personalized recruiter outreach.
+- SKIP includes job alerts/digests/newsletters, career advice/marketing, generic candidate account/profile setup, OTP/security notices, non-employment applications, consumer/financial/education/government/community workflows, and career-services/coaching/workshop administration.
+
 ### Challenges addressed
 
 - Gmail result sets can be noisy and broad terms create false positives

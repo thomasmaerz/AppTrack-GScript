@@ -183,6 +183,7 @@ const StatusUtils = {
       "selected another candidate",
       "pursuing other candidates",
       "no longer being considered",
+      "will not be considering you for this position",
       "not a good fit",
       "consider other applicants",
       "decision has been made",
