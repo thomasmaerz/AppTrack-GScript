@@ -272,6 +272,270 @@ const TestFixtures = {
     from: 'Thomas Maerz <thomas.maerz+jobs@gmail.com>',
     body: 'Hi Jenn, following up and sharing my resume for the Senior Project Manager role with your client.',
     skip: false
+  },
+  telusHealthConsumerMarketingNoise: {
+    subject: '🩺 Quick Access to Doctor Appointments through TELUS Health MyCare',
+    from: 'TELUS <telus@email.telus.com>',
+    body: 'TELUS Health MyCare doctors may be unable to prescribe medications that require an in-person assessment by a physician.',
+    skip: true
+  },
+  creditKarmaLoanMarketingNoise: {
+    subject: 'A $10,000 vacation could be yours, Thomas adam',
+    from: 'Credit Karma <notifications@creditkarma.ca>',
+    body: 'Your loan amount and APR depends on the assessment of your credit profile. You do not need to obtain a loan to qualify.',
+    skip: true
+  },
+  deloitteCareerDigestNoise: {
+    subject: 'New career opportunities with Deloitte',
+    from: 'deloitte-jobnotification@noreply.jobs2web.com',
+    body: 'Technical Cyber Risk Assessment Manager, Deloitte Global Technology - Toronto. Feel free to forward these jobs to your family or friends. Getting these notifications too often?',
+    skip: true
+  },
+  randstadCareerAdviceNewsletterNoise: {
+    subject: 'Conquer your job interview: tough questions, AI tools, and chatbot prep 📂',
+    from: 'Randstad Canada <noreply@randstad.ca>',
+    body: 'Stop fearing the interview. Get expert answers for curveball questions and learn how to practice with AI.',
+    skip: true
+  },
+  mastercardTalentCommunityProfileNoise: {
+    subject: 'Update your profile for 2026',
+    from: 'Mastercard <talent@careers.mastercard.com>',
+    body: 'Update your talent community profile and upload your latest resume/CV so we can match you with the right roles.',
+    skip: true
+  },
+  walmartRewardsCardApplicationNoise: {
+    subject: 'Thomas Adam Maerz, a message about your Walmart Rewards Mastercard application.',
+    from: 'Walmart Rewards Mastercard <info@walmart-rewards.ca>',
+    body: 'Thank you for applying for a Walmart Rewards Mastercard. We are sorry, a Walmart Rewards Mastercard cannot be issued to you at this time.',
+    skip: true
+  },
+  ctoCraftCommunityApplicationNoise: {
+    subject: 'Your membership application for CTO Craft',
+    from: 'Andy at CTO Craft <no-reply.otgsqa@zapiermail.com>',
+    body: 'Thank you for requesting to join the CTO Craft Community. We will be reviewing your full application shortly for access to our private community Slack group.',
+    skip: true
+  },
+  workbcWorkshopAppointmentNoise: {
+    subject: 'WorkBC Appointment and Workshop Reminder',
+    from: 'Rebecca Burdo Steen <rebecca.burdosteen@ethoscmg.com>',
+    body: 'Appointment with Senik. Interview Skills Workshop. If you need to change this appointment, please call the WorkBC office.',
+    skip: true
+  },
+  mcgCareerWorkshopNoise: {
+    subject: '(Virtual) Job Club Workshop October 29, 2025',
+    from: 'Tawa Awojobi <jp@mcgcareers.com>',
+    body: 'Please find the workshop link below. Virtual Job Club Workshop. Career, Employment and Training Specialists.',
+    skip: true
+  },
+  roadTestAppointmentNoise: {
+    subject: 'Alberta Road Test Confirmation For 1:00pm on Monday September 15, 2025',
+    from: 'Alberta Road Tests <noreply@albertadriverexaminer.ca>',
+    body: 'You must arrive 30 minutes prior to your road test appointment. Failure to arrive ahead of your scheduled appointment may result in cancellation.',
+    skip: true
+  },
+  missouriAdmissionsActionNeededNoise: {
+    subject: 'Your Missouri S&T Application Status - Action Needed',
+    from: 'Missouri University of Science and Technology <admissions@mst.edu>',
+    body: 'Thank you for your application to Missouri University of Science and Technology. College Transcript is required for admissions review.',
+    skip: true
+  },
+  genericCandidateAccountCreatedNoise: {
+    subject: 'Deloitte Canada career site account created',
+    from: 'Deloitte Canada Careers <noreply@deloitte.ca>',
+    body: 'Your candidate account has been created. You can login to the Deloitte Canada career site after you have activated your account.',
+    skip: true
+  },
+  linkedInApplicationViewedSignal: {
+    subject: 'Your application was viewed by Intelica Solutions Inc.',
+    from: 'LinkedIn <jobs-noreply@linkedin.com>',
+    body: 'Your application was viewed by Intelica Solutions Inc. This email was intended for Thomas Maerz.',
+    skip: false,
+    status: 'Status Update',
+    company: 'Intelica Solutions Inc.'
+  },
+  cityOfCalgarySpecificRejectionSignal: {
+    subject: 'City of Calgary Job Posting 312587, Project Manager - AMENDMENT has closed',
+    from: '<donotreply@calgary.ca>',
+    body: 'We have reviewed your application for the position of Project Manager - AMENDMENT. After careful consideration, we will not be considering you for this position at this time.',
+    skip: false,
+    status: 'Rejected',
+    title: 'Project Manager - AMENDMENT'
+  },
+  teksystemsApplicationFollowUpSignal: {
+    subject: 'TEKsystems Position',
+    from: '"Zeitzmann, Evan" <ezeitzma@teksystems.com>',
+    body: 'Thanks for reaching back out. Here is the position that you applied to. City of Calgary Google Workspace and AWS infrastructure Lead Architect.',
+    skip: false,
+    status: 'Status Update',
+    title: 'Lead Architect'
+  },
+  amazonKeepTrackApplicationSignal: {
+    subject: 'Keep track of your application',
+    from: 'noreply@mail.amazon.jobs',
+    body: 'Hi Thomas, Thank you for your interest in Delivery Consultant - Connect and Lex, Amazon Connect Center of Excellence.',
+    skip: false,
+    status: 'Applied',
+    title: 'Delivery Consultant - Connect and Lex, Amazon Connect Center of Excellence'
+  },
+  userSentDirectApplicationSignal: {
+    subject: 'Workday Project Manager (#250804) Application',
+    from: 'Thomas Maerz <maerz.thomas@gmail.com>',
+    body: 'When reading your posted job listing for a PM for Workday, I had to reach out as I have skills and experience which closely match your requirements.',
+    skip: false,
+    status: 'Response'
+  },
+  realTechnicalInterviewPrepSignal: {
+    subject: 'Preparing for a technical interview with us',
+    from: 'Talent <talent@acme.com>',
+    body: 'We would like to schedule an interview for your application and share details about preparing for a technical interview with us.',
+    skip: false,
+    status: 'Interview Request'
+  },
+  careerServicesSpecificApplicationSignal: {
+    subject: 'Application update from WorkBC partner employer',
+    from: 'Senik Shahcheraghi <senik.shahcheraghi@ethoscmg.com>',
+    body: 'WorkBC follow-up: we received your application for the Cafe Manager role and the employer is reviewing it.',
+    skip: false,
+    status: 'Applied'
+  },
+  candidateProfileTiedToNamedRoleSignal: {
+    subject: 'Complete your candidate profile for Project Manager application',
+    from: 'Recruiting <recruiting@acme.com>',
+    body: 'Please complete your candidate profile for your Project Manager application before your interview next step.',
+    skip: false
+  },
+  genericViewedByEmployersNoise: {
+    subject: 'Your application was viewed by employers',
+    from: 'Job Platform <jobs@example.com>',
+    body: 'Your application was viewed by employers and recruiters. Upgrade your profile to get more views.',
+    skip: true
+  },
+  medicalDeviceRecruiterOutreachSignal: {
+    subject: 'Medical device client needs a Senior Project Manager',
+    from: 'Hays Recruiter <recruiter@hays.ca>',
+    body: 'Hi Thomas, we are recruiting for a medical device client that is hiring a Senior Project Manager. Your profile looks aligned with this role.',
+    skip: false
+  },
+  careerServicesMentionAppliedJobNoise: {
+    subject: 'Job Club Workshop follow-up',
+    from: 'WorkBC <advisor@workbc.example.com>',
+    body: 'In tomorrow\'s workshop we will discuss how to follow up on the job that you applied to and improve your resume.',
+    skip: true
+  },
+  genericViewedByHiringTeamNoise: {
+    subject: 'Your application was viewed by the hiring team',
+    from: 'Job Platform <jobs@example.com>',
+    body: 'Your application was viewed by the hiring team. Upgrade your profile to get more views.',
+    skip: true
+  },
+  assessmentInvitationSignal: {
+    subject: 'Assessment invitation',
+    from: 'Talent <talent@acme.com>',
+    body: 'Please complete your assessment for your active application.',
+    skip: false,
+    status: 'Assessment'
+  },
+  softFinancialApplicationNoise: {
+    subject: 'Thank you for your application',
+    from: 'Credit Provider <offers@credit.example.com>',
+    body: 'Thank you for your application. Your annual percentage rate depends on your credit profile.',
+    skip: true
+  },
+  aprilRecruiterOutreachSignal: {
+    subject: 'Senior Project Manager role - April start',
+    from: 'Hays Recruiter <recruiter@hays.ca>',
+    body: 'We are hiring for a Senior Project Manager position with an April start date.',
+    skip: false
+  },
+  genericViewedByEmployerNoise: {
+    subject: 'Your application was viewed by an employer',
+    from: 'Job Platform <jobs@example.com>',
+    body: 'Your application was viewed by an employer. Upgrade your profile to get more views.',
+    skip: true
+  },
+  specificFinancialApplicationNoise: {
+    subject: 'Your application to Walmart Rewards Mastercard has been received',
+    from: 'Walmart Rewards Mastercard <info@walmart-rewards.ca>',
+    body: 'Your application to Walmart Rewards Mastercard has been received. Your annual percentage rate depends on your credit profile.',
+    skip: true
+  },
+  genericViewedByTheRecruiterNoise: {
+    subject: 'Your application was viewed by the recruiter',
+    from: 'Job Platform <jobs@example.com>',
+    body: 'Your application was viewed by the recruiter. Upgrade your profile to get more views.',
+    skip: true
+  },
+  financialRejectionNoise: {
+    subject: 'Your Walmart Rewards Mastercard application will not be moving forward',
+    from: 'Walmart Rewards Mastercard <info@walmart-rewards.ca>',
+    body: 'Your Walmart Rewards Mastercard application will not be moving forward at this time.',
+    skip: true
+  },
+  financialAssessmentNoise: {
+    subject: 'Complete your assessment for your credit profile',
+    from: 'Credit Provider <offers@credit.example.com>',
+    body: 'Complete your assessment for your credit profile and card application.',
+    skip: true
+  },
+  genericViewedByThreeEmployersNoise: {
+    subject: 'Your application was viewed by 3 employers',
+    from: 'Job Platform <jobs@example.com>',
+    body: 'Your application was viewed by 3 employers. Upgrade your profile to get more views.',
+    skip: true
+  },
+  mortgageApplicationRejectionNoise: {
+    subject: 'Your mortgage application will not be moving forward',
+    from: 'Bank <mortgages@bank.example.com>',
+    body: 'Your mortgage application will not be moving forward at this time.',
+    skip: true
+  },
+  creditApplicationAssessmentNoise: {
+    subject: 'Your credit application requires an assessment',
+    from: 'Credit Provider <offers@credit.example.com>',
+    body: 'Your credit application requires an assessment before we can continue.',
+    skip: true
+  },
+  visaApplicationReceivedNoise: {
+    subject: 'Your visa application has been received',
+    from: 'Consulate <noreply@consulate.example.com>',
+    body: 'Your visa application has been received.',
+    skip: true
+  },
+  linkedInViewedWithGenericFooterSignal: {
+    subject: 'Your application was viewed by Intelica Solutions Inc.',
+    from: 'LinkedIn <jobs-noreply@linkedin.com>',
+    body: 'Your application was viewed by Intelica Solutions Inc. Job platform summary: your application was viewed by employers and recruiters.',
+    skip: false
+  },
+  genericViewedByCommaActorListNoise: {
+    subject: 'Your application was viewed by employers, recruiters, and hiring managers.',
+    from: 'Job Platform <jobs@example.com>',
+    body: 'Your application was viewed by employers, recruiters, and hiring managers. Upgrade your profile to get more views.',
+    skip: true
+  },
+  basicFirstAidAssessmentNoise: {
+    subject: 'Complete your assessment for Basic First Aid',
+    from: 'Training Centre <info@training.example.com>',
+    body: 'Complete your assessment for Basic First Aid at the training centre.',
+    skip: true
+  },
+  ebookApplicationNoise: {
+    subject: 'Thank you for your application for the ebook',
+    from: 'Training Centre <info@training.example.com>',
+    body: 'Thank you for your application for the ebook.',
+    skip: true
+  },
+  physicianAssessmentNoise: {
+    subject: 'Complete your assessment for your physician assessment',
+    from: 'Health Provider <care@health.example.com>',
+    body: 'Complete your assessment for your physician assessment.',
+    skip: true
+  },
+  facebookApplicationLifecycleSignal: {
+    subject: 'Your application to Product Manager at Facebook has been received',
+    from: 'Meta Careers <careers@meta.com>',
+    body: 'Thank you for applying. Your application to Product Manager at Facebook has been received.',
+    skip: false
   }
 };
 
@@ -323,6 +587,52 @@ function runTrackerTests() {
   assertTrackerEqual(shouldSkipMessage(f.userSentResumeToRecruiter.subject, f.userSentResumeToRecruiter.from, f.userSentResumeToRecruiter.body), false, 'User sent recruiter resume retained');
   assertTrackerEqual(shouldSkipMessage(f.userSentResumeAliasAddress.subject, f.userSentResumeAliasAddress.from, f.userSentResumeAliasAddress.body), false, 'User sent recruiter resume from alias retained');
   assertTrackerEqual(shouldSkipMessage(f.userSentResumeFeedbackNoise.subject, f.userSentResumeFeedbackNoise.from, f.userSentResumeFeedbackNoise.body), true, 'User sent resume feedback skipped');
+  assertTrackerEqual(shouldSkipMessage(f.telusHealthConsumerMarketingNoise.subject, f.telusHealthConsumerMarketingNoise.from, f.telusHealthConsumerMarketingNoise.body), true, 'TELUS Health consumer marketing skipped');
+  assertTrackerEqual(shouldSkipMessage(f.creditKarmaLoanMarketingNoise.subject, f.creditKarmaLoanMarketingNoise.from, f.creditKarmaLoanMarketingNoise.body), true, 'Credit Karma loan marketing skipped');
+  assertTrackerEqual(shouldSkipMessage(f.deloitteCareerDigestNoise.subject, f.deloitteCareerDigestNoise.from, f.deloitteCareerDigestNoise.body), true, 'Deloitte career digest skipped');
+  assertTrackerEqual(shouldSkipMessage(f.randstadCareerAdviceNewsletterNoise.subject, f.randstadCareerAdviceNewsletterNoise.from, f.randstadCareerAdviceNewsletterNoise.body), true, 'Randstad career advice newsletter skipped');
+  assertTrackerEqual(shouldSkipMessage(f.mastercardTalentCommunityProfileNoise.subject, f.mastercardTalentCommunityProfileNoise.from, f.mastercardTalentCommunityProfileNoise.body), true, 'Mastercard talent community profile noise skipped');
+  assertTrackerEqual(shouldSkipMessage(f.walmartRewardsCardApplicationNoise.subject, f.walmartRewardsCardApplicationNoise.from, f.walmartRewardsCardApplicationNoise.body), true, 'Walmart Rewards card application skipped');
+  assertTrackerEqual(shouldSkipMessage(f.ctoCraftCommunityApplicationNoise.subject, f.ctoCraftCommunityApplicationNoise.from, f.ctoCraftCommunityApplicationNoise.body), true, 'CTO Craft community application skipped');
+  assertTrackerEqual(shouldSkipMessage(f.workbcWorkshopAppointmentNoise.subject, f.workbcWorkshopAppointmentNoise.from, f.workbcWorkshopAppointmentNoise.body), true, 'WorkBC workshop appointment skipped');
+  assertTrackerEqual(shouldSkipMessage(f.mcgCareerWorkshopNoise.subject, f.mcgCareerWorkshopNoise.from, f.mcgCareerWorkshopNoise.body), true, 'MCG career workshop skipped');
+  assertTrackerEqual(shouldSkipMessage(f.roadTestAppointmentNoise.subject, f.roadTestAppointmentNoise.from, f.roadTestAppointmentNoise.body), true, 'Road test appointment skipped');
+  assertTrackerEqual(shouldSkipMessage(f.missouriAdmissionsActionNeededNoise.subject, f.missouriAdmissionsActionNeededNoise.from, f.missouriAdmissionsActionNeededNoise.body), true, 'Missouri admissions application skipped');
+  assertTrackerEqual(shouldSkipMessage(f.genericCandidateAccountCreatedNoise.subject, f.genericCandidateAccountCreatedNoise.from, f.genericCandidateAccountCreatedNoise.body), true, 'Generic candidate account creation skipped');
+
+  assertTrackerEqual(shouldSkipMessage(f.linkedInApplicationViewedSignal.subject, f.linkedInApplicationViewedSignal.from, f.linkedInApplicationViewedSignal.body), false, 'LinkedIn application viewed retained');
+  assertTrackerEqual(shouldSkipMessage(f.cityOfCalgarySpecificRejectionSignal.subject, f.cityOfCalgarySpecificRejectionSignal.from, f.cityOfCalgarySpecificRejectionSignal.body), false, 'City of Calgary specific rejection retained');
+  assertTrackerEqual(shouldSkipMessage(f.teksystemsApplicationFollowUpSignal.subject, f.teksystemsApplicationFollowUpSignal.from, f.teksystemsApplicationFollowUpSignal.body), false, 'TEKsystems application follow-up retained');
+  assertTrackerEqual(shouldSkipMessage(f.amazonKeepTrackApplicationSignal.subject, f.amazonKeepTrackApplicationSignal.from, f.amazonKeepTrackApplicationSignal.body), false, 'Amazon keep-track application retained');
+  assertTrackerEqual(shouldSkipMessage(f.userSentDirectApplicationSignal.subject, f.userSentDirectApplicationSignal.from, f.userSentDirectApplicationSignal.body), false, 'User-sent direct application retained');
+  assertTrackerEqual(StatusUtils.determineStatus(f.linkedInApplicationViewedSignal.subject, f.linkedInApplicationViewedSignal.body, ''), f.linkedInApplicationViewedSignal.status, 'LinkedIn application viewed status');
+  assertTrackerEqual(StatusUtils.determineStatus(f.cityOfCalgarySpecificRejectionSignal.subject, f.cityOfCalgarySpecificRejectionSignal.body, ''), f.cityOfCalgarySpecificRejectionSignal.status, 'City of Calgary rejection status');
+  assertTrackerEqual(CompanyUtils.extractCompany(f.linkedInApplicationViewedSignal.subject, f.linkedInApplicationViewedSignal.body, f.linkedInApplicationViewedSignal.from, ''), f.linkedInApplicationViewedSignal.company, 'LinkedIn application viewed company extraction');
+  assertTrackerEqual(shouldSkipMessage(f.realTechnicalInterviewPrepSignal.subject, f.realTechnicalInterviewPrepSignal.from, f.realTechnicalInterviewPrepSignal.body), false, 'Real technical interview prep retained');
+  assertTrackerEqual(shouldSkipMessage(f.careerServicesSpecificApplicationSignal.subject, f.careerServicesSpecificApplicationSignal.from, f.careerServicesSpecificApplicationSignal.body), false, 'Career-services specific application retained');
+  assertTrackerEqual(shouldSkipMessage(f.candidateProfileTiedToNamedRoleSignal.subject, f.candidateProfileTiedToNamedRoleSignal.from, f.candidateProfileTiedToNamedRoleSignal.body), false, 'Candidate profile tied to named role retained');
+  assertTrackerEqual(shouldSkipMessage(f.genericViewedByEmployersNoise.subject, f.genericViewedByEmployersNoise.from, f.genericViewedByEmployersNoise.body), true, 'Generic viewed-by-employers metric skipped');
+  assertTrackerEqual(shouldSkipMessage(f.medicalDeviceRecruiterOutreachSignal.subject, f.medicalDeviceRecruiterOutreachSignal.from, f.medicalDeviceRecruiterOutreachSignal.body), false, 'Medical-device recruiter outreach retained');
+  assertTrackerEqual(shouldSkipMessage(f.careerServicesMentionAppliedJobNoise.subject, f.careerServicesMentionAppliedJobNoise.from, f.careerServicesMentionAppliedJobNoise.body), true, 'Career-services applied-job workshop skipped');
+  assertTrackerEqual(shouldSkipMessage(f.genericViewedByHiringTeamNoise.subject, f.genericViewedByHiringTeamNoise.from, f.genericViewedByHiringTeamNoise.body), true, 'Generic viewed-by-hiring-team metric skipped');
+  assertTrackerEqual(shouldSkipMessage(f.assessmentInvitationSignal.subject, f.assessmentInvitationSignal.from, f.assessmentInvitationSignal.body), false, 'Assessment invitation retained');
+  assertTrackerEqual(shouldSkipMessage(f.softFinancialApplicationNoise.subject, f.softFinancialApplicationNoise.from, f.softFinancialApplicationNoise.body), true, 'Soft financial application skipped');
+  assertTrackerEqual(shouldSkipMessage(f.aprilRecruiterOutreachSignal.subject, f.aprilRecruiterOutreachSignal.from, f.aprilRecruiterOutreachSignal.body), false, 'April recruiter outreach retained');
+  assertTrackerEqual(shouldSkipMessage(f.genericViewedByEmployerNoise.subject, f.genericViewedByEmployerNoise.from, f.genericViewedByEmployerNoise.body), true, 'Generic viewed-by-employer metric skipped');
+  assertTrackerEqual(shouldSkipMessage(f.specificFinancialApplicationNoise.subject, f.specificFinancialApplicationNoise.from, f.specificFinancialApplicationNoise.body), true, 'Specific financial application skipped');
+  assertTrackerEqual(shouldSkipMessage(f.genericViewedByTheRecruiterNoise.subject, f.genericViewedByTheRecruiterNoise.from, f.genericViewedByTheRecruiterNoise.body), true, 'Generic viewed-by-the-recruiter metric skipped');
+  assertTrackerEqual(shouldSkipMessage(f.financialRejectionNoise.subject, f.financialRejectionNoise.from, f.financialRejectionNoise.body), true, 'Financial rejection skipped');
+  assertTrackerEqual(shouldSkipMessage(f.financialAssessmentNoise.subject, f.financialAssessmentNoise.from, f.financialAssessmentNoise.body), true, 'Financial assessment skipped');
+  assertTrackerEqual(shouldSkipMessage(f.genericViewedByThreeEmployersNoise.subject, f.genericViewedByThreeEmployersNoise.from, f.genericViewedByThreeEmployersNoise.body), true, 'Generic viewed-by-three-employers metric skipped');
+  assertTrackerEqual(shouldSkipMessage(f.mortgageApplicationRejectionNoise.subject, f.mortgageApplicationRejectionNoise.from, f.mortgageApplicationRejectionNoise.body), true, 'Mortgage application rejection skipped');
+  assertTrackerEqual(shouldSkipMessage(f.creditApplicationAssessmentNoise.subject, f.creditApplicationAssessmentNoise.from, f.creditApplicationAssessmentNoise.body), true, 'Credit application assessment skipped');
+  assertTrackerEqual(shouldSkipMessage(f.visaApplicationReceivedNoise.subject, f.visaApplicationReceivedNoise.from, f.visaApplicationReceivedNoise.body), true, 'Visa application received skipped');
+  assertTrackerEqual(shouldSkipMessage(f.linkedInViewedWithGenericFooterSignal.subject, f.linkedInViewedWithGenericFooterSignal.from, f.linkedInViewedWithGenericFooterSignal.body), false, 'LinkedIn viewed with generic footer retained');
+  assertTrackerEqual(shouldSkipMessage(f.genericViewedByCommaActorListNoise.subject, f.genericViewedByCommaActorListNoise.from, f.genericViewedByCommaActorListNoise.body), true, 'Generic viewed-by-comma-actor-list metric skipped');
+  assertTrackerEqual(shouldSkipMessage(f.basicFirstAidAssessmentNoise.subject, f.basicFirstAidAssessmentNoise.from, f.basicFirstAidAssessmentNoise.body), true, 'Basic first aid assessment skipped');
+  assertTrackerEqual(shouldSkipMessage(f.ebookApplicationNoise.subject, f.ebookApplicationNoise.from, f.ebookApplicationNoise.body), true, 'Ebook application skipped');
+  assertTrackerEqual(shouldSkipMessage(f.physicianAssessmentNoise.subject, f.physicianAssessmentNoise.from, f.physicianAssessmentNoise.body), true, 'Physician assessment skipped');
+  assertTrackerEqual(shouldSkipMessage(f.facebookApplicationLifecycleSignal.subject, f.facebookApplicationLifecycleSignal.from, f.facebookApplicationLifecycleSignal.body), false, 'Facebook application lifecycle retained');
   assertTrackerEqual(StatusUtils.determineStatus(f.immediateHiringRecruiter.subject, f.immediateHiringRecruiter.body, ''), f.immediateHiringRecruiter.status, 'Recruiter outreach status');
   assertTrackerEqual(StatusUtils.determineStatus(f.recruiterFollowUp.subject, f.recruiterFollowUp.body, ''), f.recruiterFollowUp.status, 'Recruiter follow-up status');
   assertTrackerEqual(StatusUtils.determineStatus(f.mastercardReferral.subject, f.mastercardReferral.body, ''), f.mastercardReferral.status, 'Referral status');
@@ -388,6 +698,9 @@ function runTrackerTests() {
   assertTrackerEqual(geminiInstruction.indexOf('- RESPONSE:') !== -1, true, 'Gemini prompt defines RESPONSE');
   assertTrackerEqual(geminiInstruction.indexOf('RESPONSE Boundary') !== -1, true, 'Gemini prompt guards RESPONSE boundary');
   assertTrackerEqual(geminiPayload.generationConfig.responseSchema.properties.results.items.properties.cat.enum.indexOf('RESPONSE') !== -1, true, 'Gemini schema permits RESPONSE');
+  assertTrackerEqual(geminiInstruction.indexOf('your application was viewed by COMPANY') !== -1, true, 'Gemini prompt handles application viewed');
+  assertTrackerEqual(geminiInstruction.indexOf('Non-Employment Application Boundary') !== -1, true, 'Gemini prompt defines non-employment boundary');
+  assertTrackerEqual(geminiInstruction.indexOf('Generic account creation') !== -1 || geminiInstruction.indexOf('generic account creation') !== -1, true, 'Gemini prompt treats generic account creation as noise');
 
   const rawHeaders = getRawGapHeaders_();
   assertTrackerEqual(rawHeaders.length, 14, 'RawGap headers include all expected columns');

@@ -119,7 +119,10 @@ function hasBulkJobDigestSignal_(subjectLower, combinedLower) {
       'jobs are based on your preferences', 'based on your profile and preferences',
       'matched your search', 'search agent', 'every 7 days', 'is hiring for',
       'this job is a match', 'new job opportunities', 'new jobs posted from', 'weekly application update',
-      'new application updates', 'profile viewed'
+      'new application updates', 'profile viewed', 'new career opportunities',
+      'feel free to forward these jobs', 'getting these notifications too often',
+      'and more new jobs', 'more new jobs', 'application updates this week',
+      'check out the status of your applications', 'job is a match', 'based on your profile'
     ]);
 }
 
@@ -130,7 +133,31 @@ function hasCareerMarketingSignal_(combinedLower) {
     'exploring your next move', 'career chatbot', 'ai chatbot', 'browse jobs', 'browsing jobs',
     'job matches', 'resources about our hiring process', 'never applying to jobs manually',
     'free plan', 'daily market scanning', 'resume keyword', 'keywords in resume suggestion',
-    'rate your experience', 'share your recent experience', 'survey', 'feedback request'
+    'rate your experience', 'share your recent experience', 'survey', 'feedback request',
+    'get expert answers',
+    'practice with ai', 'how to get hired', 'review my cv', 'be matched', 'be visible',
+    'update your talent community profile', 'talent community profile', 'profile update request',
+    'start exploring', 'explore mastercard careers', 'planning to apply',
+    'browsing for jobs'
+  ]);
+}
+
+function hasCareerInterviewAdviceMarketingSignal_(combinedLower) {
+  return containsAny_(combinedLower, [
+    'technical interview with us',
+    'preparing for a technical interview',
+    'preparing for an interview'
+  ]) && containsAny_(combinedLower, [
+    'newsletter',
+    'career advice',
+    'resources about our hiring process',
+    'learn about the hiring process',
+    'learn about the mastercard hiring process',
+    'browse jobs',
+    'browsing jobs',
+    'planning to apply',
+    'if you’re preparing',
+    'if you are preparing'
   ]);
 }
 
@@ -140,8 +167,83 @@ function hasNonEmploymentApplicationObject_(combinedLower) {
     'income support', 'financial aid', 'loan application', 'credit card application',
     'housing application', 'student portal', 'student application', 'admission decision', 'admissions application',
     'office of admissions', 'graduation application', 'pmp application', 'certification application',
-    'road test', 'driver examiner', 'oauth application', 'third-party oauth', 'third-party github application'
+    'road test', 'driver examiner', 'oauth application', 'third-party oauth', 'third-party github application',
+    'doctor appointment', 'doctor appointments', 'health mycare', 'physician assessment', 'medical appointment',
+    'credit profile', 'annual percentage rate', 'rewards mastercard', 'walmart rewards', 'membership application',
+    'community application', 'private community slack', 'ctocraft', 'ctocraft community',
+    'training centre', 'basic first aid', ' e-book', ' ebook ', 'application for income support'
   ]);
+}
+
+function hasHardNonEmploymentApplicationObject_(combinedLower) {
+  return containsAny_(combinedLower, [
+    'loan application',
+    'credit card application',
+    'mortgage application',
+    'credit application',
+    'card application',
+    'bank account application',
+    'visa application',
+    'line of credit application',
+    'personal loan application',
+    'credit profile',
+    'annual percentage rate',
+    'rewards mastercard',
+    'walmart rewards',
+    'income support',
+    'social insurance number',
+    ' sin ',
+    ' nas ',
+    'passport',
+    'reisepass',
+    'consulate',
+    'student portal',
+    'student application',
+    'admissions application',
+    'office of admissions',
+    'graduation application',
+    'pmp application',
+    'certification application',
+    'road test',
+    'driver examiner',
+    'doctor appointment',
+    'doctor appointments',
+    'health mycare',
+    'physician assessment',
+    'medical appointment',
+    'training centre',
+    'basic first aid',
+    ' e-book',
+    ' ebook ',
+    'membership application',
+    'community application',
+    'private community slack',
+    'ctocraft',
+    'ctocraft community',
+    'application for income support'
+  ]);
+}
+
+function isGenericApplicationViewedActor_(actor) {
+  const normalized = String(actor || '')
+    .replace(/\b(This email|View application|Job ID|Reference|Unsubscribe|Upgrade).*$/i, '')
+    .replace(/,/g, ' and ')
+    .replace(/[\/&]/g, ' and ')
+    .replace(/[\s.]+$/g, '')
+    .replace(/\s+/g, ' ')
+    .replace(/\band\s+and\b/g, 'and')
+    .trim();
+  return /^(?:(?:\d+|multiple|some|several|many)\s+)?(?:the\s+|an?\s+)?(?:employers?|recruiters?|companies|company|hiring managers?|hiring teams?|someone|someone else)(?:\s+(?:and|or)\s+(?:(?:\d+|multiple|some|several|many)\s+)?(?:the\s+|an?\s+)?(?:employers?|recruiters?|companies|company|hiring managers?|hiring teams?|someone|someone else))*$/i.test(normalized);
+}
+
+function hasNamedApplicationViewedActor_(text) {
+  const value = String(text || '');
+  const pattern = /your application was viewed by\s+([^\n.]+)/ig;
+  let match;
+  while ((match = pattern.exec(value)) !== null) {
+    if (match[1] && !isGenericApplicationViewedActor_(match[1])) return true;
+  }
+  return false;
 }
 
 function hasTransactionalApplicationSignal_(combinedLower) {
@@ -160,7 +262,13 @@ function hasTransactionalApplicationSignal_(combinedLower) {
 
 function hasSpecificApplicationPipelineSignal_(subjectLower, combinedLower) {
   return isSpecificLinkedInApplicationSubject_(subjectLower) ||
-    containsPattern_(combinedLower, /your application (?:to|for) .+ (?:has been received|has been submitted|was submitted|was sent|has an update|is under review|is being reviewed)/i);
+    containsPattern_(combinedLower, /your application (?:to|for) .+ (?:has been received|has been submitted|was submitted|was sent|has an update|is under review|is being reviewed)/i) ||
+    containsPattern_(combinedLower, /here is the (?:position|role|job) that you applied to/i) ||
+    containsPattern_(subjectLower, /^keep track of your application$/i);
+}
+
+function hasSpecificApplicationViewedSignal_(subjectLower, combinedLower) {
+  return hasNamedApplicationViewedActor_(subjectLower) || hasNamedApplicationViewedActor_(combinedLower);
 }
 
 function hasRoleAtEmployerPattern_(subjectLower, combinedLower) {
@@ -175,18 +283,80 @@ function hasRejectionSignal_(combinedLower) {
     'proceed with other candidates', 'move forward with other candidates',
     'position has been filled', 'regret to inform', 'no longer being considered',
     'not successful', 'selected another candidate', 'more closely aligned',
-    'going in a different direction'
+    'going in a different direction', 'will not be considering you for this position'
   ]);
 }
 
 function hasInterviewOrAssessmentSignal_(combinedLower) {
   return containsAny_(combinedLower, [
-    'interview scheduling', 'interview request', 'schedule your interview', 'schedule an interview',
-    'invitation to interview', 'phone interview invitation', 'discuss your application further',
-    'schedule a brief introductory meeting', 'moved to the next step of our hiring',
-    'selected for the next round of our hiring process', 'next round of our hiring process',
-    'moving forward with', 'previous hiring step', 'coding challenge', 'technical challenge',
-    'skills assessment', 'assessment', 'take-home', 'take home'
+    'interview scheduling',
+    'interview request',
+    'schedule your interview',
+    'schedule an interview',
+    'invitation to interview',
+    'phone interview invitation',
+    'discuss your application further',
+    'schedule a brief introductory meeting',
+    'moved to the next step of our hiring',
+    'selected for the next round of our hiring process',
+    'next round of our hiring process',
+    'moving forward with your application',
+    'previous hiring step',
+    'coding challenge',
+    'technical challenge',
+    'take-home assessment',
+    'take home assessment',
+    'technical assessment',
+    'skills assessment for',
+    'assessment invitation',
+    'complete your assessment',
+    'assessment for the role',
+    'assessment for this role',
+    'assessment for your application',
+    'complete the assessment for'
+  ]);
+}
+
+function hasCareerServicesNoiseSignal_(combinedLower, fromLower) {
+  return containsAny_(combinedLower + ' ' + fromLower, [
+    'job placement coach',
+    'employment counsellor',
+    'career coach',
+    'career & employment advisor',
+    'career and employment advisor',
+    'career, employment and training specialists',
+    'workbc',
+    'mcg careers',
+    'mcbride career group',
+    'prospect human services',
+    'prospectnow',
+    'hidden job market workshop',
+    'resume workshop',
+    'job club workshop',
+    'workshop calendar',
+    'employment services intake',
+    'funded by the government',
+    'bring a copy of your resume',
+    'social insurance number is required to access services'
+  ]);
+}
+
+function hasGenericCandidateAccountNoiseSignal_(combinedLower) {
+  return containsAny_(combinedLower, [
+    'candidate account has been created',
+    'career site account created',
+    'verify your candidate account',
+    'confirm your email address and complete setup',
+    'welcome to microsoft careers',
+    'welcome to wellfound',
+    'welcome to mercor',
+    'complete your profile',
+    'finish your profile',
+    'activate your account',
+    'update your profile',
+    'talent community profile',
+    'candidate profile creation',
+    'profile completion nudge'
   ]);
 }
 
@@ -211,7 +381,8 @@ function hasSelfSentRecruitingResponse_(combinedLower, fromLower) {
   return containsAny_(combinedLower, [
     'attached my resume', 'resume ahead of our call', 'resume for the', 'i have applied for',
     'i am writing to express', 'thank you for reaching out', 'application follow-up',
-    'position at', 'role at', 'interview invitation', 'accepted:', 'new time proposed:'
+    'position at', 'role at', 'interview invitation', 'accepted:', 'new time proposed:',
+    'posted job listing', 'i had to reach out', 'closely match your requirements'
   ]);
 }
 
@@ -310,10 +481,12 @@ function classifyRegexDecision(subject, from, bodyOrSnippet) {
   const fromLower = String(from || '').toLowerCase();
   const domain = senderDomain_(from);
   const combined = lowerSubject + ' ' + lowerBody + ' ' + fromLower;
+  const subjectBodyText = lowerSubject + '\n' + lowerBody;
   const hasSpecificLinkedInApplicationSubject = isSpecificLinkedInApplicationSubject_(lowerSubject);
   const hasReferralSignal = containsAny_(combined, ['you have been referred', 'referred to a job']);
   const hasApplicationSignal = hasTransactionalApplicationSignal_(combined);
   const hasSpecificApplicationPipelineSignal = hasSpecificApplicationPipelineSignal_(lowerSubject, combined);
+  const hasSpecificApplicationViewedSignal = hasSpecificApplicationViewedSignal_(lowerSubject, subjectBodyText);
   const hasDirectRecruiterOutreachSignal = hasDirectRecruiterOutreachSignal_(combined);
   const hasLinkedInRecruiterMessageSignal = hasLinkedInRecruiterMessageSignal_(combined, fromLower);
   const hasRoleAtEmployerPattern = hasRoleAtEmployerPattern_(lowerSubject, combined);
@@ -321,7 +494,25 @@ function classifyRegexDecision(subject, from, bodyOrSnippet) {
   const hasInterviewOrAssessmentSignal = hasInterviewOrAssessmentSignal_(combined);
   const hasCandidatePortalSignal = hasCandidatePortalWorkflow_(combined);
   const hasApplicationOtpSignal = hasApplicationOtpWorkflow_(combined);
-  const hasActivePipelineSignal = hasApplicationSignal || hasSpecificApplicationPipelineSignal || hasReferralSignal || hasRejectionSignal_(combined) || hasInterviewOrAssessmentSignal_(combined) || hasCandidatePortalWorkflow_(combined) || hasDirectRecruiterOutreachSignal || hasLinkedInRecruiterMessageSignal;
+  const hasMaterialPipelineSignal = hasApplicationSignal ||
+    hasSpecificApplicationPipelineSignal ||
+    hasSpecificApplicationViewedSignal ||
+    hasReferralSignal ||
+    hasRejectionSignal ||
+    hasInterviewOrAssessmentSignal ||
+    hasCandidatePortalSignal ||
+    hasApplicationOtpSignal ||
+    hasDirectRecruiterOutreachSignal ||
+    hasLinkedInRecruiterMessageSignal;
+  const hasActivePipelineSignal = hasApplicationSignal ||
+    hasSpecificApplicationPipelineSignal ||
+    hasSpecificApplicationViewedSignal ||
+    hasReferralSignal ||
+    hasRejectionSignal_(combined) ||
+    hasInterviewOrAssessmentSignal_(combined) ||
+    hasCandidatePortalWorkflow_(combined) ||
+    hasDirectRecruiterOutreachSignal ||
+    hasLinkedInRecruiterMessageSignal;
   const hasOtpSignal = containsAny_(combined, ['security code', 'verification code', 'one-time passcode', 'one-time-passcode', 'one-time password', 'one-time code']);
   const isSecurityAccountNoise = containsAny_(combined, ['oauth application', 'third-party oauth', 'third-party github application', 'security alert', 'authorized to access your github account', 'apps connected to your account']);
   const isGovernmentNonJobApplication = containsAny_(combined, ['social insurance number', ' sin ', ' nas ', 'passport', 'reisepass', 'consulate', 'income support']);
@@ -354,13 +545,18 @@ function classifyRegexDecision(subject, from, bodyOrSnippet) {
   if (isGovernmentNonJobApplication) return { skip: true, reason: 'government_non_job_application', confidence: 'high' };
   if (isEducationCertificationNoise || (isUniversityAdmissionsNoise && (!hasRoleAtEmployerPattern || (!hasApplicationSignal && !hasSpecificApplicationPipelineSignal && !hasReferralSignal && !hasRejectionSignal && !hasInterviewOrAssessmentSignal && !hasCandidatePortalSignal && !hasApplicationOtpSignal)))) return { skip: true, reason: 'education_certification_noise', confidence: 'high' };
   if (isConsumerAccountNoise) return { skip: true, reason: 'consumer_account_noise', confidence: 'high' };
+  if (hasHardNonEmploymentApplicationObject_(combined)) return { skip: true, reason: 'non_employment_application_noise', confidence: 'high' };
 
   if (lowerSubject.indexOf('your application was sent to') !== -1) return { skip: false, reason: 'linkedin_application_sent', confidence: 'high' };
   if (hasSpecificLinkedInApplicationSubject) return { skip: false, reason: 'specific_application_update', confidence: 'high' };
+  if (hasSpecificApplicationViewedSignal) return { skip: false, reason: 'application_viewed_signal', confidence: 'high' };
   if (hasReferralSignal) return { skip: false, reason: 'referral', confidence: 'high' };
 
   if (hasBulkJobDigestSignal_(lowerSubject, combined) && !hasActivePipelineSignal) return { skip: true, reason: 'job_board_digest_noise', confidence: 'high' };
-  if ((isNewsletterNoise || hasCareerMarketingSignal_(combined)) && !hasActivePipelineSignal) return { skip: true, reason: 'career_marketing_noise', confidence: 'high' };
+  if ((isNewsletterNoise || hasCareerMarketingSignal_(combined) || hasCareerInterviewAdviceMarketingSignal_(combined)) && !hasActivePipelineSignal) return { skip: true, reason: 'career_marketing_noise', confidence: 'high' };
+  if (hasNonEmploymentApplicationObject_(combined) && !hasMaterialPipelineSignal) return { skip: true, reason: 'non_employment_application_noise', confidence: 'high' };
+  if (hasGenericCandidateAccountNoiseSignal_(combined) && !hasMaterialPipelineSignal) return { skip: true, reason: 'candidate_account_noise', confidence: 'high' };
+  if (hasCareerServicesNoiseSignal_(combined, fromLower) && !hasMaterialPipelineSignal && !hasSelfSentRecruitingResponse_(combined, fromLower)) return { skip: true, reason: 'career_services_noise', confidence: 'high' };
   if (containsAny_(combined, ['community membership', 'ctocraft', 'ctocraft community', 'slack invitation']) && !hasActivePipelineSignal) return { skip: true, reason: 'professional_community_noise', confidence: 'high' };
   if (containsAny_(combined, ['job placement coach', 'employment counsellor', 'workbc', 'mcg careers', 'hidden job market workshop']) && !hasActivePipelineSignal) return { skip: true, reason: 'career_services_noise', confidence: 'high' };
 
@@ -368,6 +564,7 @@ function classifyRegexDecision(subject, from, bodyOrSnippet) {
   if (hasOtpSignal && !hasApplicationOtpSignal) return { skip: true, reason: 'otp_noise', confidence: 'high' };
   if (hasRejectionSignal) return { skip: false, reason: 'rejection_signal', confidence: 'high' };
   if (hasInterviewOrAssessmentSignal) return { skip: false, reason: 'interview_or_assessment_signal', confidence: 'high' };
+  if (hasSpecificApplicationViewedSignal) return { skip: false, reason: 'application_viewed_signal', confidence: 'high' };
   if (hasSpecificApplicationPipelineSignal) return { skip: false, reason: 'specific_application_update', confidence: 'high' };
   if (hasApplicationSignal) return { skip: false, reason: 'application_transactional_signal', confidence: 'high' };
   if (hasCandidatePortalSignal) return { skip: false, reason: 'candidate_portal_workflow', confidence: 'medium' };
