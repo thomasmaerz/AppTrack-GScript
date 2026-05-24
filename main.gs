@@ -917,6 +917,7 @@ const GEMINI_BROAD_GAP_CONFIG = {
   classificationSafetyMs: 90 * 1000,
   resumeDelayMs: 60 * 1000
 };
+const BROAD_GAP_TARGET_SPREADSHEET_ID_KEY = 'broad_gap_target_spreadsheet_id';
 
 const BROAD_GAP_LLM_HEADERS = [
   "Thread ID", "Date", "From", "Subject", "Regex Decision", "Regex Reason", "Regex Confidence",
@@ -933,37 +934,67 @@ function scheduleGeminiBroadGapResume_() {
 }
 
 function runGeminiBroadGapAudit() {
-  return runGeminiBroadGapAuditWithLock_();
+  return runGeminiBroadGapAuditWithLock_(false);
 }
 
 function resumeGeminiBroadGapAudit() {
   Logger.log("Resuming Gemini Broad Gap Audit from trigger execution...");
-  return runGeminiBroadGapAuditWithLock_();
+  return runGeminiBroadGapAuditWithLock_(true);
 }
 
-function runGeminiBroadGapAuditWithLock_() {
+function resolveBroadGapSpreadsheet_(isResume, scriptProperties) {
+  scriptProperties = scriptProperties || PropertiesService.getScriptProperties();
+  const storedSpreadsheetId = scriptProperties.getProperty(BROAD_GAP_TARGET_SPREADSHEET_ID_KEY);
+
+  if (isResume && storedSpreadsheetId) {
+    const spreadsheet = SpreadsheetApp.openById(storedSpreadsheetId);
+    Logger.log(`Gemini BroadGap target spreadsheet: name=${spreadsheet.getName()}, id=${spreadsheet.getId()}, url=${spreadsheet.getUrl()}`);
+    return spreadsheet;
+  }
+
+  const spreadsheet = getOrCreateSpreadsheet(TARGET_SPREADSHEET_ID);
+  const spreadsheetId = spreadsheet.getId();
+
+  if (!isResume && storedSpreadsheetId && storedSpreadsheetId !== spreadsheetId) {
+    scriptProperties.deleteProperty('gap_extraction_start');
+    scriptProperties.deleteProperty('gap_classification_next_index');
+    Logger.log(`Gemini BroadGap target changed from ${storedSpreadsheetId} to ${spreadsheetId}. Cleared stale resume state.`);
+  }
+
+  if (!storedSpreadsheetId || !isResume) {
+    scriptProperties.setProperty(BROAD_GAP_TARGET_SPREADSHEET_ID_KEY, spreadsheetId);
+  }
+
+  Logger.log(`Gemini BroadGap target spreadsheet: name=${spreadsheet.getName()}, id=${spreadsheetId}, url=${spreadsheet.getUrl()}`);
+  return spreadsheet;
+}
+
+function runGeminiBroadGapAuditWithLock_(isResume) {
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(5000)) {
     Logger.log('Gemini BroadGap audit is already running. Scheduling another resume.');
+    if (!isResume) {
+      resolveBroadGapSpreadsheet_(false, PropertiesService.getScriptProperties());
+    }
     scheduleGeminiBroadGapResume_();
     return;
   }
 
   try {
-    return runGeminiBroadGapAuditInternal_();
+    return runGeminiBroadGapAuditInternal_(isResume);
   } finally {
     lock.releaseLock();
   }
 }
 
-function runGeminiBroadGapAuditInternal_() {
+function runGeminiBroadGapAuditInternal_(isResume) {
   const startTime = Date.now();
   const maxRuntimeMs = GEMINI_BROAD_GAP_CONFIG.maxRuntimeMs;
   const stopBufferMs = GEMINI_BROAD_GAP_CONFIG.stopBufferMs;
   const classificationSafetyMs = GEMINI_BROAD_GAP_CONFIG.classificationSafetyMs;
   
-  const spreadsheet = getOrCreateSpreadsheet();
   const scriptProperties = PropertiesService.getScriptProperties();
+  const spreadsheet = resolveBroadGapSpreadsheet_(!!isResume, scriptProperties);
   
   // Check if BroadSearchDB exists and has cached emails
   let gapDbSheet = spreadsheet.getSheetByName("BroadSearchDB");
@@ -1138,17 +1169,21 @@ function runGeminiBroadGapClassification(spreadsheet, startTime, maxRuntimeMs, s
   maxRuntimeMs = maxRuntimeMs || GEMINI_BROAD_GAP_CONFIG.maxRuntimeMs;
   stopBufferMs = stopBufferMs || GEMINI_BROAD_GAP_CONFIG.stopBufferMs;
   classificationSafetyMs = classificationSafetyMs || GEMINI_BROAD_GAP_CONFIG.classificationSafetyMs;
+  const scriptProperties = PropertiesService.getScriptProperties();
 
   const gapDbSheet = spreadsheet.getSheetByName("BroadSearchDB");
   if (!gapDbSheet || gapDbSheet.getLastRow() <= 1) {
     Logger.log("No data found in BroadSearchDB cache for classification.");
+    scriptProperties.deleteProperty('gap_extraction_start');
+    scriptProperties.deleteProperty('gap_classification_next_index');
+    scriptProperties.deleteProperty(BROAD_GAP_TARGET_SPREADSHEET_ID_KEY);
+    deleteGapAuditTriggers();
     return;
   }
   
   const cachedData = gapDbSheet.getRange(2, 1, gapDbSheet.getLastRow() - 1, 5).getValues();
   Logger.log(`Loaded ${cachedData.length} records from local cache. Beginning Gemini audit...`);
 
-  const scriptProperties = PropertiesService.getScriptProperties();
   const nextIndexKey = 'gap_classification_next_index';
   let nextIndex = Number(scriptProperties.getProperty(nextIndexKey) || '0');
 
@@ -1234,6 +1269,7 @@ function runGeminiBroadGapClassification(spreadsheet, startTime, maxRuntimeMs, s
       const batchRows = batchThreadLogs.map(logItem => buildBroadGapLLMRow_(logItem, geminiMap.get(logItem.threadId)));
       if (batchRows.length > 0) {
         gapSheet.getRange(gapSheet.getLastRow() + 1, 1, batchRows.length, BROAD_GAP_LLM_HEADERS.length).setValues(batchRows);
+        Logger.log(`Persisted ${batchRows.length} rows to BroadGapLLM. Sheet now has ${gapSheet.getLastRow()} rows.`);
       }
 
       const nextBatchIndex = nextIndex + i + batch.length;
@@ -1256,8 +1292,11 @@ function runGeminiBroadGapClassification(spreadsheet, startTime, maxRuntimeMs, s
   gapSheet.hideColumn(gapSheet.getRange(1, 1, 1, 1));
   
   SpreadsheetUtils.formatGapLLMSheet(gapSheet, gapSheet.getLastRow());
+  scriptProperties.deleteProperty('gap_extraction_start');
   scriptProperties.deleteProperty(nextIndexKey);
+  scriptProperties.deleteProperty(BROAD_GAP_TARGET_SPREADSHEET_ID_KEY);
   deleteGapAuditTriggers();
+  Logger.log(`Gemini BroadGap classification complete. BroadGapLLM rows=${gapSheet.getLastRow()}.`);
   
   try {
     SpreadsheetApp.getActive().toast(`Gemini Broad Search Gap Audit complete! Open the "BroadGapLLM" sheet tab to inspect results!`);
@@ -1285,6 +1324,7 @@ function clearBroadSearchDB() {
   const scriptProperties = PropertiesService.getScriptProperties();
   scriptProperties.deleteProperty('gap_extraction_start');
   scriptProperties.deleteProperty('gap_classification_next_index');
+  scriptProperties.deleteProperty(BROAD_GAP_TARGET_SPREADSHEET_ID_KEY);
   
   // Clear triggers
   deleteGapAuditTriggers();

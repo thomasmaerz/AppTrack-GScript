@@ -570,8 +570,11 @@ function createBroadGapTestRange_(sheet, row, col, numRows, numCols) {
     setFontColor: function() { return this; },
     setFontWeight: function() { return this; },
     setHorizontalAlignment: function() { return this; },
+    setVerticalAlignment: function() { return this; },
     setBackgrounds: function() { return this; },
-    setFontColors: function() { return this; }
+    setFontColors: function() { return this; },
+    setBorder: function() { return this; },
+    createFilter: function() { return this; }
   };
 }
 
@@ -595,7 +598,13 @@ function createBroadGapTestSheet_(rows) {
 
 function createBroadGapTestSpreadsheet_(sheets) {
   return {
+    id: 'test-spreadsheet-id',
+    name: 'Application Tracker',
+    url: 'https://docs.google.com/spreadsheets/d/test-spreadsheet-id/edit',
     sheets: sheets || {},
+    getId: function() { return this.id; },
+    getName: function() { return this.name; },
+    getUrl: function() { return this.url; },
     getSheetByName: function(name) { return this.sheets[name] || null; },
     insertSheet: function(name) {
       this.sheets[name] = createBroadGapTestSheet_([]);
@@ -607,6 +616,158 @@ function createBroadGapTestSpreadsheet_(sheets) {
       }
     }
   };
+}
+
+function testGeminiBroadGapResumeUsesStoredTargetSpreadsheet_() {
+  const propertyStore = { broad_gap_target_spreadsheet_id: 'sheet-primary' };
+  const selectedSpreadsheet = createBroadGapTestSpreadsheet_({});
+  selectedSpreadsheet.id = 'sheet-primary';
+  selectedSpreadsheet.url = 'https://docs.google.com/spreadsheets/d/sheet-primary/edit';
+  let openedId = null;
+
+  withBroadGapClassificationStubs_(propertyStore, function() {
+    const originalOpenById = SpreadsheetApp.openById;
+    SpreadsheetApp.openById = function(spreadsheetId) {
+      openedId = spreadsheetId;
+      return selectedSpreadsheet;
+    };
+
+    try {
+      const spreadsheet = resolveBroadGapSpreadsheet_(true, PropertiesService.getScriptProperties());
+      assertTrackerEqual(spreadsheet.getId(), 'sheet-primary', 'BroadGap resume returns stored target spreadsheet');
+    } finally {
+      SpreadsheetApp.openById = originalOpenById;
+    }
+  });
+
+  assertTrackerEqual(openedId, 'sheet-primary', 'BroadGap resume opens stored target spreadsheet ID instead of active/fallback context');
+  assertTrackerEqual(propertyStore.broad_gap_target_spreadsheet_id, 'sheet-primary', 'BroadGap resume keeps target spreadsheet binding while work may continue');
+}
+
+function testGeminiBroadGapResumeRejectsStoredTargetFallback_() {
+  const propertyStore = { broad_gap_target_spreadsheet_id: 'sheet-primary' };
+
+  withBroadGapClassificationStubs_(propertyStore, function() {
+    const originalOpenById = SpreadsheetApp.openById;
+    const originalGetOrCreateSpreadsheet = getOrCreateSpreadsheet;
+    SpreadsheetApp.openById = function() { throw new Error('stored spreadsheet unavailable'); };
+    getOrCreateSpreadsheet = function() {
+      const fallbackSpreadsheet = createBroadGapTestSpreadsheet_({});
+      fallbackSpreadsheet.id = 'fallback-sheet';
+      return fallbackSpreadsheet;
+    };
+
+    try {
+      try {
+        resolveBroadGapSpreadsheet_(true, PropertiesService.getScriptProperties());
+        throw new Error('BroadGap resume unexpectedly accepted fallback spreadsheet');
+      } catch (e) {
+        assertTrackerEqual(String(e).indexOf('stored spreadsheet unavailable') !== -1, true, 'BroadGap resume fails instead of falling back when stored target cannot open');
+      }
+    } finally {
+      SpreadsheetApp.openById = originalOpenById;
+      getOrCreateSpreadsheet = originalGetOrCreateSpreadsheet;
+    }
+  });
+}
+
+function testGeminiBroadGapManualTargetChangeClearsOldResumeState_() {
+  const propertyStore = {
+    broad_gap_target_spreadsheet_id: 'sheet-old',
+    gap_extraction_start: '250',
+    gap_classification_next_index: '450'
+  };
+  const selectedSpreadsheet = createBroadGapTestSpreadsheet_({});
+  selectedSpreadsheet.id = 'sheet-new';
+
+  withBroadGapClassificationStubs_(propertyStore, function() {
+    const originalGetOrCreateSpreadsheet = getOrCreateSpreadsheet;
+    getOrCreateSpreadsheet = function() { return selectedSpreadsheet; };
+
+    try {
+      resolveBroadGapSpreadsheet_(false, PropertiesService.getScriptProperties());
+    } finally {
+      getOrCreateSpreadsheet = originalGetOrCreateSpreadsheet;
+    }
+  });
+
+  assertTrackerEqual(propertyStore.broad_gap_target_spreadsheet_id, 'sheet-new', 'BroadGap manual start refreshes target binding');
+  assertTrackerEqual(propertyStore.gap_extraction_start, undefined, 'BroadGap manual target change clears stale extraction state');
+  assertTrackerEqual(propertyStore.gap_classification_next_index, undefined, 'BroadGap manual target change clears stale classification state');
+}
+
+function testGeminiBroadGapLockUnavailableBindsManualTargetBeforeResume_() {
+  const propertyStore = {};
+  const selectedSpreadsheet = createBroadGapTestSpreadsheet_({});
+  selectedSpreadsheet.id = 'sheet-primary';
+  const triggerCalls = [];
+
+  withBroadGapClassificationStubs_(propertyStore, function() {
+    const originalGetScriptLock = LockService.getScriptLock;
+    const originalGetOrCreateSpreadsheet = getOrCreateSpreadsheet;
+    const originalNewTrigger = ScriptApp.newTrigger;
+    LockService.getScriptLock = function() {
+      return { tryLock: function() { return false; }, releaseLock: function() { throw new Error('releaseLock should not run when lock is unavailable'); } };
+    };
+    getOrCreateSpreadsheet = function() { return selectedSpreadsheet; };
+    ScriptApp.newTrigger = function(handler) {
+      const call = { handler: handler };
+      triggerCalls.push(call);
+      return {
+        timeBased: function() { return this; },
+        after: function() { return this; },
+        create: function() { call.created = true; return this; }
+      };
+    };
+
+    try {
+      runGeminiBroadGapAuditWithLock_(false);
+    } finally {
+      LockService.getScriptLock = originalGetScriptLock;
+      getOrCreateSpreadsheet = originalGetOrCreateSpreadsheet;
+      ScriptApp.newTrigger = originalNewTrigger;
+    }
+  });
+
+  assertTrackerEqual(propertyStore.broad_gap_target_spreadsheet_id, 'sheet-primary', 'BroadGap lock-unavailable manual start binds target before scheduling resume');
+  assertTrackerEqual(triggerCalls.length, 1, 'BroadGap lock-unavailable manual start schedules one resume');
+  assertTrackerEqual(triggerCalls[0].handler, 'resumeGeminiBroadGapAudit', 'BroadGap lock-unavailable manual start schedules resume handler');
+}
+
+function testBroadGapClassificationNoCacheClearsTargetBinding_() {
+  const propertyStore = {
+    broad_gap_target_spreadsheet_id: 'sheet-primary',
+    gap_extraction_start: '250',
+    gap_classification_next_index: '450'
+  };
+  const spreadsheet = createBroadGapTestSpreadsheet_({});
+
+  withBroadGapClassificationStubs_(propertyStore, function() {
+    runGeminiBroadGapClassification(spreadsheet, Date.now(), GEMINI_BROAD_GAP_CONFIG.maxRuntimeMs, GEMINI_BROAD_GAP_CONFIG.stopBufferMs, 0);
+  });
+
+  assertTrackerEqual(propertyStore.broad_gap_target_spreadsheet_id, undefined, 'BroadGap no-cache classification clears target binding when no resume is pending');
+  assertTrackerEqual(propertyStore.gap_extraction_start, undefined, 'BroadGap no-cache classification clears stale extraction state');
+  assertTrackerEqual(propertyStore.gap_classification_next_index, undefined, 'BroadGap no-cache classification clears stale classification state');
+}
+
+function testBroadGapClassificationCompletionClearsStaleExtractionState_() {
+  const propertyStore = { gap_extraction_start: '250' };
+  const spreadsheet = createBroadGapTestSpreadsheet_({
+    BroadSearchDB: createBroadGapTestSheet_(createBroadGapCacheRows_())
+  });
+
+  withBroadGapClassificationStubs_(propertyStore, function() {
+    GeminiClient.classifyBatch = function(batch) {
+      return batch.map(function(item) {
+        return { idx: item.idx, rel: true, cat: 'APPLIED', rea: 'Application confirmation.', co: 'Acme', ti: 'Engineer' };
+      });
+    };
+
+    runGeminiBroadGapClassification(spreadsheet, Date.now(), GEMINI_BROAD_GAP_CONFIG.maxRuntimeMs, GEMINI_BROAD_GAP_CONFIG.stopBufferMs, 0);
+  });
+
+  assertTrackerEqual(propertyStore.gap_extraction_start, undefined, 'BroadGap full classification completion clears stale extraction state');
 }
 
 function withBroadGapClassificationStubs_(propertyStore, callback) {
@@ -731,7 +892,7 @@ function testGeminiBroadGapLockUnavailableSchedulesResume_() {
   };
 
   try {
-    runGeminiBroadGapAuditWithLock_();
+    runGeminiBroadGapAuditWithLock_(true);
   } finally {
     LockService.getScriptLock = originalGetScriptLock;
     ScriptApp.getProjectTriggers = originalGetProjectTriggers;
@@ -913,6 +1074,12 @@ function runTrackerTests() {
   assertTrackerEqual(triggerCalls[0].created, true, 'Gemini Broad Gap resume schedule creates trigger');
   testBroadGapClassificationPersistsBatchBeforeError_();
   testBroadGapClassificationResumeMissingOutputStartsFresh_();
+  testGeminiBroadGapResumeUsesStoredTargetSpreadsheet_();
+  testGeminiBroadGapResumeRejectsStoredTargetFallback_();
+  testGeminiBroadGapManualTargetChangeClearsOldResumeState_();
+  testGeminiBroadGapLockUnavailableBindsManualTargetBeforeResume_();
+  testBroadGapClassificationNoCacheClearsTargetBinding_();
+  testBroadGapClassificationCompletionClearsStaleExtractionState_();
   testGeminiBroadGapLockUnavailableSchedulesResume_();
   testGeminiBroadGapLockReleasesInFinally_();
   assertTrackerEqual(getHigherPriorityStatus('Offer Received', 'Status Update'), 'Offer Received', 'status never downgrades');
