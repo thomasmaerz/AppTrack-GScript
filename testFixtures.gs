@@ -543,6 +543,233 @@ function assertTrackerEqual(actual, expected, label) {
   if (actual !== expected) throw new Error(label + ': expected ' + expected + ', got ' + actual);
 }
 
+function createBroadGapTestRange_(sheet, row, col, numRows, numCols) {
+  return {
+    getValues: function() {
+      const values = [];
+      for (let r = 0; r < numRows; r++) {
+        const outputRow = [];
+        for (let c = 0; c < numCols; c++) {
+          outputRow.push((sheet.rows[row - 1 + r] || [])[col - 1 + c] || '');
+        }
+        values.push(outputRow);
+      }
+      return values;
+    },
+    setValues: function(values) {
+      for (let r = 0; r < values.length; r++) {
+        const targetRow = row - 1 + r;
+        if (!sheet.rows[targetRow]) sheet.rows[targetRow] = [];
+        for (let c = 0; c < values[r].length; c++) {
+          sheet.rows[targetRow][col - 1 + c] = values[r][c];
+        }
+      }
+      return this;
+    },
+    setBackground: function() { return this; },
+    setFontColor: function() { return this; },
+    setFontWeight: function() { return this; },
+    setHorizontalAlignment: function() { return this; },
+    setBackgrounds: function() { return this; },
+    setFontColors: function() { return this; }
+  };
+}
+
+function createBroadGapTestSheet_(rows) {
+  return {
+    rows: rows || [],
+    getLastRow: function() { return this.rows.length; },
+    getLastColumn: function() {
+      let max = 0;
+      for (let i = 0; i < this.rows.length; i++) max = Math.max(max, this.rows[i].length);
+      return max || 1;
+    },
+    getRange: function(row, col, numRows, numCols) { return createBroadGapTestRange_(this, row, col, numRows, numCols); },
+    clear: function() { this.rows = []; return this; },
+    autoResizeColumns: function() { return this; },
+    hideColumn: function() { return this; },
+    setRowHeights: function() { return this; },
+    setFrozenRows: function() { return this; }
+  };
+}
+
+function createBroadGapTestSpreadsheet_(sheets) {
+  return {
+    sheets: sheets || {},
+    getSheetByName: function(name) { return this.sheets[name] || null; },
+    insertSheet: function(name) {
+      this.sheets[name] = createBroadGapTestSheet_([]);
+      return this.sheets[name];
+    },
+    deleteSheet: function(sheet) {
+      for (const name in this.sheets) {
+        if (this.sheets[name] === sheet) delete this.sheets[name];
+      }
+    }
+  };
+}
+
+function withBroadGapClassificationStubs_(propertyStore, callback) {
+  const originalGetScriptProperties = PropertiesService.getScriptProperties;
+  const originalGetProjectTriggers = ScriptApp.getProjectTriggers;
+  const originalDeleteTrigger = ScriptApp.deleteTrigger;
+  const originalNewTrigger = ScriptApp.newTrigger;
+  const originalClassifyBatch = GeminiClient.classifyBatch;
+  const originalBatchSize = GEMINI_CONFIG.batchSize;
+
+  const scriptProperties = {
+    getProperty: function(key) {
+      return Object.prototype.hasOwnProperty.call(propertyStore, key) ? propertyStore[key] : null;
+    },
+    setProperty: function(key, value) { propertyStore[key] = String(value); },
+    deleteProperty: function(key) { delete propertyStore[key]; }
+  };
+
+  PropertiesService.getScriptProperties = function() { return scriptProperties; };
+  ScriptApp.getProjectTriggers = function() { return []; };
+  ScriptApp.deleteTrigger = function() {};
+  ScriptApp.newTrigger = function() {
+    return {
+      timeBased: function() { return this; },
+      after: function() { return this; },
+      create: function() { return this; }
+    };
+  };
+
+  try {
+    callback();
+  } finally {
+    PropertiesService.getScriptProperties = originalGetScriptProperties;
+    ScriptApp.getProjectTriggers = originalGetProjectTriggers;
+    ScriptApp.deleteTrigger = originalDeleteTrigger;
+    ScriptApp.newTrigger = originalNewTrigger;
+    GeminiClient.classifyBatch = originalClassifyBatch;
+    GEMINI_CONFIG.batchSize = originalBatchSize;
+  }
+}
+
+function createBroadGapCacheRows_() {
+  return [
+    ['Thread ID', 'Date', 'From', 'Subject', 'Snippet'],
+    ['thread-1', '2026-01-01T00:00:00.000Z', 'Careers <careers@acme.com>', 'Application submitted', 'Your application was submitted successfully.'],
+    ['thread-2', '2026-01-02T00:00:00.000Z', 'Careers <careers@example.com>', 'Interview invitation', 'We would like to schedule an interview.']
+  ];
+}
+
+function testBroadGapClassificationPersistsBatchBeforeError_() {
+  const propertyStore = {};
+  const spreadsheet = createBroadGapTestSpreadsheet_({
+    BroadSearchDB: createBroadGapTestSheet_(createBroadGapCacheRows_())
+  });
+
+  withBroadGapClassificationStubs_(propertyStore, function() {
+    GEMINI_CONFIG.batchSize = 1;
+    let calls = 0;
+    GeminiClient.classifyBatch = function(batch) {
+      calls++;
+      if (calls === 2) throw new Error('forced Gemini failure');
+      return [{ idx: batch[0].idx, rel: true, cat: 'APPLIED', rea: 'Application confirmation.', co: 'Acme', ti: 'Engineer' }];
+    };
+
+    runGeminiBroadGapClassification(spreadsheet, Date.now(), GEMINI_BROAD_GAP_CONFIG.maxRuntimeMs, GEMINI_BROAD_GAP_CONFIG.stopBufferMs, 0);
+  });
+
+  const outputSheet = spreadsheet.getSheetByName('BroadGapLLM');
+  assertTrackerEqual(!!outputSheet, true, 'BroadGap classification creates output before later Gemini failure');
+  assertTrackerEqual(outputSheet.rows.length, 2, 'BroadGap classification persists successful batch before later Gemini failure');
+  assertTrackerEqual(outputSheet.rows[0][0], 'Thread ID', 'BroadGap persisted output includes header');
+  assertTrackerEqual(outputSheet.rows[1][0], 'thread-1', 'BroadGap persisted output includes successful thread');
+  assertTrackerEqual(outputSheet.rows[1][7], 'PASS', 'BroadGap persisted output keeps Gemini decision mapping');
+  assertTrackerEqual(outputSheet.rows[1][9], 'Applied', 'BroadGap persisted output keeps Gemini class mapping');
+  assertTrackerEqual(propertyStore.gap_classification_next_index, '1', 'BroadGap classification resumes after last persisted batch');
+}
+
+function testBroadGapClassificationResumeMissingOutputStartsFresh_() {
+  const propertyStore = { gap_classification_next_index: '1' };
+  const spreadsheet = createBroadGapTestSpreadsheet_({
+    BroadSearchDB: createBroadGapTestSheet_(createBroadGapCacheRows_())
+  });
+
+  withBroadGapClassificationStubs_(propertyStore, function() {
+    GeminiClient.classifyBatch = function(batch) {
+      return batch.map(function(item) {
+        return { idx: item.idx, rel: true, cat: 'APPLIED', rea: 'Application confirmation.', co: 'Acme', ti: 'Engineer' };
+      });
+    };
+
+    runGeminiBroadGapClassification(spreadsheet, Date.now(), GEMINI_BROAD_GAP_CONFIG.maxRuntimeMs, GEMINI_BROAD_GAP_CONFIG.stopBufferMs, 0);
+  });
+
+  const outputSheet = spreadsheet.getSheetByName('BroadGapLLM');
+  assertTrackerEqual(outputSheet.rows[0][0], 'Thread ID', 'BroadGap missing resume output restarts with headers');
+  assertTrackerEqual(outputSheet.rows.length, 3, 'BroadGap missing resume output restarts from first cached row');
+  assertTrackerEqual(outputSheet.rows[1][0], 'thread-1', 'BroadGap missing resume output includes first cached row');
+  assertTrackerEqual(outputSheet.rows[2][0], 'thread-2', 'BroadGap missing resume output includes second cached row');
+  assertTrackerEqual(propertyStore.gap_classification_next_index, undefined, 'BroadGap complete classification clears resume index');
+}
+
+function testGeminiBroadGapLockUnavailableSchedulesResume_() {
+  const originalGetScriptLock = LockService.getScriptLock;
+  const originalGetProjectTriggers = ScriptApp.getProjectTriggers;
+  const originalDeleteTrigger = ScriptApp.deleteTrigger;
+  const originalNewTrigger = ScriptApp.newTrigger;
+  const triggerCalls = [];
+
+  LockService.getScriptLock = function() {
+    return { tryLock: function() { return false; }, releaseLock: function() { throw new Error('releaseLock should not run when lock is unavailable'); } };
+  };
+  ScriptApp.getProjectTriggers = function() { return []; };
+  ScriptApp.deleteTrigger = function() {};
+  ScriptApp.newTrigger = function(handler) {
+    const call = { handler: handler, afterMs: null, created: false };
+    triggerCalls.push(call);
+    return {
+      timeBased: function() { return this; },
+      after: function(ms) { call.afterMs = ms; return this; },
+      create: function() { call.created = true; return this; }
+    };
+  };
+
+  try {
+    runGeminiBroadGapAuditWithLock_();
+  } finally {
+    LockService.getScriptLock = originalGetScriptLock;
+    ScriptApp.getProjectTriggers = originalGetProjectTriggers;
+    ScriptApp.deleteTrigger = originalDeleteTrigger;
+    ScriptApp.newTrigger = originalNewTrigger;
+  }
+
+  assertTrackerEqual(triggerCalls.length, 1, 'Gemini Broad Gap lock unavailable schedules one resume');
+  assertTrackerEqual(triggerCalls[0].handler, 'resumeGeminiBroadGapAudit', 'Gemini Broad Gap lock unavailable schedules resume handler');
+  assertTrackerEqual(triggerCalls[0].afterMs, GEMINI_BROAD_GAP_CONFIG.resumeDelayMs, 'Gemini Broad Gap lock unavailable uses configured resume delay');
+  assertTrackerEqual(triggerCalls[0].created, true, 'Gemini Broad Gap lock unavailable creates resume trigger');
+}
+
+function testGeminiBroadGapLockReleasesInFinally_() {
+  const originalGetScriptLock = LockService.getScriptLock;
+  const originalRunInternal = runGeminiBroadGapAuditInternal_;
+  let released = false;
+
+  LockService.getScriptLock = function() {
+    return { tryLock: function() { return true; }, releaseLock: function() { released = true; } };
+  };
+  runGeminiBroadGapAuditInternal_ = function() { throw new Error('forced audit failure'); };
+
+  try {
+    try {
+      runGeminiBroadGapAuditWithLock_();
+      throw new Error('Gemini Broad Gap lock test did not propagate audit failure');
+    } catch (e) {
+      assertTrackerEqual(String(e).indexOf('forced audit failure') !== -1, true, 'Gemini Broad Gap lock propagates audit failure');
+    }
+  } finally {
+    LockService.getScriptLock = originalGetScriptLock;
+    runGeminiBroadGapAuditInternal_ = originalRunInternal;
+  }
+
+  assertTrackerEqual(released, true, 'Gemini Broad Gap lock releases in finally');
+}
+
 function runTrackerTests() {
   const f = TestFixtures;
   assertTrackerEqual(shouldSkipMessage(f.linkedInDigest.subject, f.linkedInDigest.from, f.linkedInDigest.body), true, 'LinkedIn digest skipped');
@@ -654,6 +881,40 @@ function runTrackerTests() {
   assertTrackerEqual(StatusUtils.determineStatus(f.interviewWithDigestFooter.subject, f.interviewWithDigestFooter.body, ''), f.interviewWithDigestFooter.status, 'interview with digest footer status');
   assertTrackerEqual(StatusUtils.determineStatus(f.nextRoundHiringProcessUpdate.subject, f.nextRoundHiringProcessUpdate.body, ''), f.nextRoundHiringProcessUpdate.status, 'next round hiring process is not rejection');
   assertTrackerEqual(getBatchSize(), SCAN_CONFIG.batchSize, 'batch size');
+  assertTrackerEqual(GEMINI_BROAD_GAP_CONFIG.maxRuntimeMs, 6 * 60 * 1000, 'Gemini Broad Gap max runtime');
+  assertTrackerEqual(GEMINI_BROAD_GAP_CONFIG.stopBufferMs, 30 * 1000, 'Gemini Broad Gap stop buffer');
+  assertTrackerEqual(GEMINI_BROAD_GAP_CONFIG.classificationSafetyMs, 90 * 1000, 'Gemini Broad Gap classification safety');
+  assertTrackerEqual(GEMINI_BROAD_GAP_CONFIG.resumeDelayMs, 60 * 1000, 'Gemini Broad Gap resume delay');
+  const originalGetProjectTriggers = ScriptApp.getProjectTriggers;
+  const originalDeleteTrigger = ScriptApp.deleteTrigger;
+  const originalNewTrigger = ScriptApp.newTrigger;
+  const triggerCalls = [];
+  ScriptApp.getProjectTriggers = function() { return []; };
+  ScriptApp.deleteTrigger = function() {};
+  ScriptApp.newTrigger = function(handler) {
+    const call = { handler: handler, afterMs: null, created: false };
+    triggerCalls.push(call);
+    return {
+      timeBased: function() { return this; },
+      after: function(ms) { call.afterMs = ms; return this; },
+      create: function() { call.created = true; return this; }
+    };
+  };
+  try {
+    scheduleGeminiBroadGapResume_();
+  } finally {
+    ScriptApp.getProjectTriggers = originalGetProjectTriggers;
+    ScriptApp.deleteTrigger = originalDeleteTrigger;
+    ScriptApp.newTrigger = originalNewTrigger;
+  }
+  assertTrackerEqual(triggerCalls.length, 1, 'Gemini Broad Gap resume schedule creates one trigger');
+  assertTrackerEqual(triggerCalls[0].handler, 'resumeGeminiBroadGapAudit', 'Gemini Broad Gap resume schedule uses resume handler');
+  assertTrackerEqual(triggerCalls[0].afterMs, GEMINI_BROAD_GAP_CONFIG.resumeDelayMs, 'Gemini Broad Gap resume schedule uses configured delay');
+  assertTrackerEqual(triggerCalls[0].created, true, 'Gemini Broad Gap resume schedule creates trigger');
+  testBroadGapClassificationPersistsBatchBeforeError_();
+  testBroadGapClassificationResumeMissingOutputStartsFresh_();
+  testGeminiBroadGapLockUnavailableSchedulesResume_();
+  testGeminiBroadGapLockReleasesInFinally_();
   assertTrackerEqual(getHigherPriorityStatus('Offer Received', 'Status Update'), 'Offer Received', 'status never downgrades');
   assertTrackerEqual(getHigherPriorityStatus('Applied', 'Interview Request'), 'Interview Request', 'status upgrades');
   const runStart = new Date('2026-05-18T12:00:00Z');

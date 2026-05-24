@@ -843,6 +843,7 @@ const SpreadsheetUtils = {
   },
 
   formatGapLLMSheet: function(sheet, rowCount) {
+    rowCount = rowCount || sheet.getLastRow();
     if (rowCount <= 1) return;
     
     // Header styling
