@@ -267,6 +267,64 @@ const TestFixtures = {
     body: 'Would you please review my resume and cover letter to provide feedback for the position I am applying for?',
     skip: true
   },
+  mitEducationProgramMarketingNoise: {
+    subject: 'Brochure with Curriculum - No Code AI and Machine Learning Program by MIT Professional Education',
+    from: 'No Code AI and Machine Learning Program by MIT Professional Education <ncai.mit@mygreatlearning.com>',
+    body: 'take next step and complete your application form for the No Code AI and Machine Learning Program. Brochure with curriculum.',
+    skip: true
+  },
+  telusPaymentAppliedNoise: {
+    subject: 'Payment applied to your TELUS account',
+    from: 'TELUS <telusservice@i.telus.com>',
+    body: 'You have made payment to your TELUS account. Amount paid. Mode of payment. Authorization number.',
+    skip: true
+  },
+  randstadCareerAdviceNewsletterNoise2: {
+    subject: 'You survived rollercoaster in 2025! 🎢 Now, let’s fuel your 2026.',
+    from: 'Randstad Canada <noreply@randstad.ca>',
+    body: 'From negotiating benefits to mastering tough interviews, here is your roadmap for what is next.',
+    skip: true
+  },
+  graduationApplicationNoise: {
+    subject: 'Application for Graduation',
+    from: 'Thomas Maerz <maerz.thomas@gmail.com>',
+    body: 'I was told I needed to apply for admissions to apply for graduation. This certificate would help differentiate my resume.',
+    skip: true
+  },
+  personalInterviewPrepAdviceNoise: {
+    subject: 'Some interviewing questions to help prepare',
+    from: 'Vicky Maerz <vickymaerz@gmail.com>',
+    body: 'JOB INTERVIEW CHEAT SHEET. Tell me your story. What sets you apart from other candidates?',
+    skip: true
+  },
+  transcendDirectRecruiterOutreachSignal: {
+    subject: 'Fulltime Job Opportunity:: Field Technician (Desktop Support):: Fort Collins, CO',
+    from: 'Dipankar Bhattacharya <dipankar@transcendstaffing.com>',
+    body: 'Hi Thomas, I am recruiter with Transcend Staffing. Find below job description. Role: Field Technician Desktop Support. Location: Fort Collins. Duration: contract to hire.',
+    skip: false,
+    status: 'Recruiter Outreach'
+  },
+  teemaInfrastructureRecruiterSignal: {
+    subject: '*HYBRID* Saskatchewan WCB: Infrastructure Specialist (4+ month contract)',
+    from: 'Robert Ha <rha@teemagroup.com>',
+    body: 'Hi Thomas, you have great infrastructure profile so I thought I would reach out. I have a 4+ month contract with Saskatchewan WCB as an Infrastructure Specialist.',
+    skip: false,
+    status: 'Recruiter Outreach'
+  },
+  javierInterviewFollowUpSignal: {
+    subject: 'Int. Network Consultant',
+    from: 'Javier Angulo <Javier.Angulo1@lvs1.com>',
+    body: 'I checked in with recruiter handling the IGS Network Consultant role. They are still interviewing. Caveat is that it pays less than role you interviewed for.',
+    skip: false,
+    status: 'Recruiter Follow-up'
+  },
+  zeissApplicationReviewSignal: {
+    subject: 'Zeiss Position',
+    from: 'Thomas Maerz <maerz.thomas@gmail.com>',
+    body: 'review my resume and cover letter to provide feedback for position at Zeiss I am applying for? https://zeissgroup.wd3.myworkdayjobs.com/job/Taipei/IT-Project-Manager',
+    skip: false,
+    status: 'Response'
+  },
   userSentResumeAliasAddress: {
     subject: 'Resume follow-up for Senior Project Manager role',
     from: 'Thomas Maerz <thomas.maerz+jobs@gmail.com>',
@@ -975,6 +1033,15 @@ function runTrackerTests() {
   assertTrackerEqual(shouldSkipMessage(f.userSentResumeToRecruiter.subject, f.userSentResumeToRecruiter.from, f.userSentResumeToRecruiter.body), false, 'User sent recruiter resume retained');
   assertTrackerEqual(shouldSkipMessage(f.userSentResumeAliasAddress.subject, f.userSentResumeAliasAddress.from, f.userSentResumeAliasAddress.body), false, 'User sent recruiter resume from alias retained');
   assertTrackerEqual(shouldSkipMessage(f.userSentResumeFeedbackNoise.subject, f.userSentResumeFeedbackNoise.from, f.userSentResumeFeedbackNoise.body), true, 'User sent resume feedback skipped');
+  assertTrackerEqual(shouldSkipMessage(f.mitEducationProgramMarketingNoise.subject, f.mitEducationProgramMarketingNoise.from, f.mitEducationProgramMarketingNoise.body), true, 'MIT education program marketing skipped');
+  assertTrackerEqual(shouldSkipMessage(f.telusPaymentAppliedNoise.subject, f.telusPaymentAppliedNoise.from, f.telusPaymentAppliedNoise.body), true, 'TELUS payment applied skipped');
+  assertTrackerEqual(shouldSkipMessage(f.randstadCareerAdviceNewsletterNoise2.subject, f.randstadCareerAdviceNewsletterNoise2.from, f.randstadCareerAdviceNewsletterNoise2.body), true, 'Randstad roadmap newsletter skipped');
+  assertTrackerEqual(shouldSkipMessage(f.graduationApplicationNoise.subject, f.graduationApplicationNoise.from, f.graduationApplicationNoise.body), true, 'Graduation application skipped');
+  assertTrackerEqual(shouldSkipMessage(f.personalInterviewPrepAdviceNoise.subject, f.personalInterviewPrepAdviceNoise.from, f.personalInterviewPrepAdviceNoise.body), true, 'Personal interview prep advice skipped');
+  assertTrackerEqual(shouldSkipMessage(f.transcendDirectRecruiterOutreachSignal.subject, f.transcendDirectRecruiterOutreachSignal.from, f.transcendDirectRecruiterOutreachSignal.body), false, 'Transcend direct recruiter outreach retained');
+  assertTrackerEqual(shouldSkipMessage(f.teemaInfrastructureRecruiterSignal.subject, f.teemaInfrastructureRecruiterSignal.from, f.teemaInfrastructureRecruiterSignal.body), false, 'TEEMA direct recruiter outreach retained');
+  assertTrackerEqual(shouldSkipMessage(f.javierInterviewFollowUpSignal.subject, f.javierInterviewFollowUpSignal.from, f.javierInterviewFollowUpSignal.body), false, 'Javier interview follow-up retained');
+  assertTrackerEqual(shouldSkipMessage(f.zeissApplicationReviewSignal.subject, f.zeissApplicationReviewSignal.from, f.zeissApplicationReviewSignal.body), false, 'Zeiss application review retained');
   assertTrackerEqual(shouldSkipMessage(f.telusHealthConsumerMarketingNoise.subject, f.telusHealthConsumerMarketingNoise.from, f.telusHealthConsumerMarketingNoise.body), true, 'TELUS Health consumer marketing skipped');
   assertTrackerEqual(shouldSkipMessage(f.creditKarmaLoanMarketingNoise.subject, f.creditKarmaLoanMarketingNoise.from, f.creditKarmaLoanMarketingNoise.body), true, 'Credit Karma loan marketing skipped');
   assertTrackerEqual(shouldSkipMessage(f.deloitteCareerDigestNoise.subject, f.deloitteCareerDigestNoise.from, f.deloitteCareerDigestNoise.body), true, 'Deloitte career digest skipped');
@@ -1123,12 +1190,22 @@ function runTrackerTests() {
   assertTrackerEqual(mapGeminiCategoryToTrackerStatus_('RESPONSE'), 'Response', 'Gemini RESPONSE maps to tracker Response');
   const geminiPayload = buildGeminiClassificationPayload_([{ idx: '001', f: 'Thomas Maerz <maerz.thomas@gmail.com>', s: 'Accepted: Interview', sn: 'Accepted interview invitation.', pc: 'Acme', pt: 'Project Manager' }]);
   const geminiInstruction = geminiPayload.contents[0].parts[0].text;
+  const strictPrompt = buildGeminiSystemInstruction_();
+  assertTrackerEqual(strictPrompt.indexOf('Decision Order:') !== -1, true, 'Gemini prompt has explicit decision order');
+  assertTrackerEqual(strictPrompt.indexOf('First apply hard NOISE gates') !== -1, true, 'Gemini prompt applies hard noise gates first');
+  assertTrackerEqual(strictPrompt.indexOf('job-search-adjacent') !== -1, true, 'Gemini prompt skips job-search-adjacent non-events');
+  assertTrackerEqual(strictPrompt.indexOf('Do not classify PASS based on keywords alone') !== -1, true, 'Gemini prompt rejects keyword-only PASS');
+  assertTrackerEqual(strictPrompt.indexOf('Do not require pc or pt to be populated') !== -1, true, 'Gemini prompt does not depend on extracted company/title columns');
   assertTrackerEqual(geminiInstruction.indexOf('- RESPONSE:') !== -1, true, 'Gemini prompt defines RESPONSE');
   assertTrackerEqual(geminiInstruction.indexOf('RESPONSE Boundary') !== -1, true, 'Gemini prompt guards RESPONSE boundary');
   assertTrackerEqual(geminiPayload.generationConfig.responseSchema.properties.results.items.properties.cat.enum.indexOf('RESPONSE') !== -1, true, 'Gemini schema permits RESPONSE');
   assertTrackerEqual(geminiInstruction.indexOf('your application was viewed by COMPANY') !== -1, true, 'Gemini prompt handles application viewed');
   assertTrackerEqual(geminiInstruction.indexOf('Non-Employment Application Boundary') !== -1, true, 'Gemini prompt defines non-employment boundary');
   assertTrackerEqual(geminiInstruction.indexOf('Generic account creation') !== -1 || geminiInstruction.indexOf('generic account creation') !== -1, true, 'Gemini prompt treats generic account creation as noise');
+  const noThinkingConfig = applyGeminiThinkingConfig_({ temperature: 0.0 }, 0);
+  assertTrackerEqual(noThinkingConfig.thinkingConfig === undefined, true, 'Gemini thinking config disabled by default');
+  const highThinkingConfig = applyGeminiThinkingConfig_({ temperature: 0.0 }, 24576);
+  assertTrackerEqual(highThinkingConfig.thinkingConfig.thinkingBudget, 24576, 'Gemini thinking budget can be enabled experimentally');
 
   const rawHeaders = getRawGapHeaders_();
   assertTrackerEqual(rawHeaders.length, 14, 'RawGap headers include all expected columns');

@@ -138,7 +138,14 @@ function hasCareerMarketingSignal_(combinedLower) {
     'practice with ai', 'how to get hired', 'review my cv', 'be matched', 'be visible',
     'update your talent community profile', 'talent community profile', 'profile update request',
     'start exploring', 'explore mastercard careers', 'planning to apply',
-    'browsing for jobs'
+    'browsing for jobs',
+    'roadmap for what is next',
+    'mastering tough interviews',
+    'job interview cheat sheet',
+    'tell me your story',
+    'what sets you apart from other candidates',
+    'career advice newsletter',
+    'fuel your 2026'
   ]);
 }
 
@@ -171,7 +178,9 @@ function hasNonEmploymentApplicationObject_(combinedLower) {
     'doctor appointment', 'doctor appointments', 'health mycare', 'physician assessment', 'medical appointment',
     'credit profile', 'annual percentage rate', 'rewards mastercard', 'walmart rewards', 'membership application',
     'community application', 'private community slack', 'ctocraft', 'ctocraft community',
-    'training centre', 'basic first aid', ' e-book', ' ebook ', 'application for income support'
+    'training centre', 'basic first aid', ' e-book', ' ebook ', 'application for income support',
+    'professional education', 'curriculum', 'brochure', 'no code ai', 'machine learning program',
+    'application for graduation', 'apply for graduation', 'apply for admissions', 'interview cheat sheet'
   ]);
 }
 
@@ -220,7 +229,16 @@ function hasHardNonEmploymentApplicationObject_(combinedLower) {
     'private community slack',
     'ctocraft',
     'ctocraft community',
-    'application for income support'
+    'application for income support',
+    'professional education',
+    'curriculum',
+    'brochure',
+    'no code ai',
+    'machine learning program',
+    'application for graduation',
+    'apply for graduation',
+    'apply for admissions',
+    'interview cheat sheet'
   ]);
 }
 
@@ -377,7 +395,21 @@ function isLikelySelfSent_(fromLower) {
 
 function hasSelfSentRecruitingResponse_(combinedLower, fromLower) {
   if (!isLikelySelfSent_(fromLower)) return false;
-  if (containsAny_(combinedLower, ['resume feedback', 'cover letter feedback', 'provide feedback', 'job prospects', 'alberta supports', 'graduation application'])) return false;
+  if (containsAny_(combinedLower, ['job prospects', 'alberta supports', 'graduation application', 'apply for graduation', 'apply for admissions'])) return false;
+  const hasConcreteJobApplicationLink = containsAny_(combinedLower, [
+    'workdayjobs.com',
+    'myworkdayjobs.com',
+    'greenhouse.io',
+    'lever.co',
+    'smartrecruiters.com',
+    'icims.com',
+    'application for the',
+    'position at',
+    'role at',
+    'i am applying for',
+    "i'm applying for"
+  ]);
+  if (containsAny_(combinedLower, ['resume feedback', 'cover letter feedback', 'provide feedback']) && !hasConcreteJobApplicationLink) return false;
   return containsAny_(combinedLower, [
     'attached my resume', 'resume ahead of our call', 'resume for the', 'i have applied for',
     'i am writing to express', 'thank you for reaching out', 'application follow-up',
@@ -387,7 +419,7 @@ function hasSelfSentRecruitingResponse_(combinedLower, fromLower) {
 }
 
 function hasDirectRecruiterOutreachSignal_(combinedLower) {
-  return containsAny_(combinedLower, ['immediate hiring', 'contract opportunity', 'came across your profile', 'saw your profile', 'send your resume', 'forward your resume', 'presenting your profile', 'profile to our client']);
+  return containsAny_(combinedLower, ['immediate hiring', 'contract opportunity', 'came across your profile', 'saw your profile', 'send your resume', 'forward your resume', 'presenting your profile', 'profile to our client', 'i am recruiter', 'i am a recruiter', 'i am recruiter with', 'i am a recruiter with', 'recruiter with', 'thought i would reach out', 'recruiter handling', 'they are still interviewing']);
 }
 
 function hasLinkedInRecruiterMessageSignal_(combinedLower, fromLower) {
@@ -518,7 +550,7 @@ function classifyRegexDecision(subject, from, bodyOrSnippet) {
   const isGovernmentNonJobApplication = containsAny_(combined, ['social insurance number', ' sin ', ' nas ', 'passport', 'reisepass', 'consulate', 'income support']);
   const isEducationCertificationNoise = containsAny_(combined, ['pmp application', 'certification application', 'course brochure', 'program advisor', 'graduate programs', 'admissions application', 'graduation application', 'office of admissions', 'admission decision']);
   const isUniversityAdmissionsNoise = hasUniversityAdmissionsNoiseSignal_(combined, fromLower);
-  const isConsumerAccountNoise = containsAny_(combined, ['billing statement', 'statement is now available', 'tax slip', 'insurance quote', 'road test', 'triangle rewards', 'bonus ct money']);
+  const isConsumerAccountNoise = containsAny_(combined, ['billing statement', 'statement is now available', 'tax slip', 'insurance quote', 'road test', 'triangle rewards', 'bonus ct money', 'payment applied', 'payment received', 'telus account', 'mobile services', 'authorization of payment', 'amount paid', 'mode of payment']);
   const isFinanceHousingStudentApplicationNoise = containsAny_(combined, ['financial aid', 'loan application', 'credit card application', 'housing application', 'student portal', 'student application']);
   const isNewsletterNoise = domain.indexOf('substack') !== -1 ||
     domain.indexOf('beehiiv') !== -1 ||
